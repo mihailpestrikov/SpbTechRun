@@ -27,3 +27,6 @@ Thumbs.db
 # Go
 *.test
 coverage.out
+
+# ML
+ml/data/
