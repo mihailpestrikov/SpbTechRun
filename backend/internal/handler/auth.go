@@ -11,15 +11,20 @@ import (
 	"github.com/mpstrkv/spbtechrun/internal/service"
 )
 
+const sessionCookieNameAuth = "session_id"
+
 type AuthHandler struct {
 	authService *service.AuthService
+	cartService *service.CartService
 }
 
-func NewAuthHandler(authService *service.AuthService) *AuthHandler {
-	return &AuthHandler{authService: authService}
+func NewAuthHandler(authService *service.AuthService, cartService *service.CartService) *AuthHandler {
+	return &AuthHandler{
+		authService: authService,
+		cartService: cartService,
+	}
 }
 
-// Register POST /api/auth/register
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req dto.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -43,7 +48,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-// Login POST /api/auth/login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -65,13 +69,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	if sessionID, err := c.Cookie(sessionCookieNameAuth); err == nil && sessionID != "" {
+		_ = h.cartService.MergeGuestCart(c.Request.Context(), sessionID, user.ID)
+		c.SetCookie(sessionCookieNameAuth, "", -1, "/", "", false, true)
+	}
+
 	c.JSON(http.StatusOK, dto.AuthResponse{
 		Token: token,
 		User:  dto.UserToResponse(user),
 	})
 }
 
-// Profile GET /api/auth/profile
 func (h *AuthHandler) Profile(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {

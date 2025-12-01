@@ -34,7 +34,7 @@ func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Eng
 	productHandler := NewProductHandler(productRepo)
 	cartHandler := NewCartHandler(cartService)
 	orderHandler := NewOrderHandler()
-	authHandler := NewAuthHandler(authService)
+	authHandler := NewAuthHandler(authService, cartService)
 	recommendationHandler := NewRecommendationHandler()
 
 	authMiddleware := middleware.Auth(authService)
