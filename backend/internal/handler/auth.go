@@ -54,11 +54,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	user, token, err := h.authService.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Аккаунт не найден"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "account not found"})
 			return
 		}
 		if errors.Is(err, service.ErrInvalidPassword) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный пароль"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid password"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

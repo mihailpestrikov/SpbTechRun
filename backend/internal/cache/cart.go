@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,11 +11,14 @@ import (
 )
 
 const (
-	cartKeyPrefix = "cart:guest:"
-	cartTTL       = 7 * 24 * time.Hour // 7 дней
+	guestCartKeyPrefix = "cart:guest:"
+	userCartKeyPrefix  = "cart:user:"
+	guestCartTTL       = 30 * 24 * time.Hour
+	userCartTTL        = 1 * time.Hour
 )
 
-type GuestCartItem struct {
+type CartItem struct {
+	ID        int `json:"id,omitempty"`
 	ProductID int `json:"product_id"`
 	Quantity  int `json:"quantity"`
 }
@@ -27,20 +31,20 @@ func NewCartCache(client *Client) *CartCache {
 	return &CartCache{rdb: client.Redis()}
 }
 
-func cartKey(sessionID string) string {
-	return cartKeyPrefix + sessionID
+func guestCartKey(sessionID string) string {
+	return guestCartKeyPrefix + sessionID
 }
 
-func (c *CartCache) GetCart(ctx context.Context, sessionID string) ([]GuestCartItem, error) {
-	data, err := c.rdb.Get(ctx, cartKey(sessionID)).Bytes()
+func (c *CartCache) GetGuestCart(ctx context.Context, sessionID string) ([]CartItem, error) {
+	data, err := c.rdb.Get(ctx, guestCartKey(sessionID)).Bytes()
 	if err != nil {
 		if err == redis.Nil {
-			return []GuestCartItem{}, nil // Пустая корзина
+			return []CartItem{}, nil
 		}
 		return nil, err
 	}
 
-	var items []GuestCartItem
+	var items []CartItem
 	if err := json.Unmarshal(data, &items); err != nil {
 		return nil, err
 	}
@@ -48,42 +52,38 @@ func (c *CartCache) GetCart(ctx context.Context, sessionID string) ([]GuestCartI
 	return items, nil
 }
 
-func (c *CartCache) SetCart(ctx context.Context, sessionID string, items []GuestCartItem) error {
+func (c *CartCache) SetGuestCart(ctx context.Context, sessionID string, items []CartItem) error {
 	data, err := json.Marshal(items)
 	if err != nil {
 		return err
 	}
 
-	return c.rdb.Set(ctx, cartKey(sessionID), data, cartTTL).Err()
+	return c.rdb.Set(ctx, guestCartKey(sessionID), data, guestCartTTL).Err()
 }
 
-func (c *CartCache) AddItem(ctx context.Context, sessionID string, productID, quantity int) error {
-	items, err := c.GetCart(ctx, sessionID)
+func (c *CartCache) AddGuestItem(ctx context.Context, sessionID string, productID, quantity int) error {
+	items, err := c.GetGuestCart(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 
-	found := false
 	for i, item := range items {
 		if item.ProductID == productID {
 			items[i].Quantity += quantity
-			found = true
-			break
+			return c.SetGuestCart(ctx, sessionID, items)
 		}
 	}
 
-	if !found {
-		items = append(items, GuestCartItem{
-			ProductID: productID,
-			Quantity:  quantity,
-		})
-	}
+	items = append(items, CartItem{
+		ProductID: productID,
+		Quantity:  quantity,
+	})
 
-	return c.SetCart(ctx, sessionID, items)
+	return c.SetGuestCart(ctx, sessionID, items)
 }
 
-func (c *CartCache) UpdateQuantity(ctx context.Context, sessionID string, productID, quantity int) error {
-	items, err := c.GetCart(ctx, sessionID)
+func (c *CartCache) UpdateGuestQuantity(ctx context.Context, sessionID string, productID, quantity int) error {
+	items, err := c.GetGuestCart(ctx, sessionID)
 	if err != nil {
 		return err
 	}
@@ -95,15 +95,15 @@ func (c *CartCache) UpdateQuantity(ctx context.Context, sessionID string, produc
 			} else {
 				items[i].Quantity = quantity
 			}
-			return c.SetCart(ctx, sessionID, items)
+			return c.SetGuestCart(ctx, sessionID, items)
 		}
 	}
 
 	return fmt.Errorf("product %d not found in cart", productID)
 }
 
-func (c *CartCache) RemoveItem(ctx context.Context, sessionID string, productID int) error {
-	items, err := c.GetCart(ctx, sessionID)
+func (c *CartCache) RemoveGuestItem(ctx context.Context, sessionID string, productID int) error {
+	items, err := c.GetGuestCart(ctx, sessionID)
 	if err != nil {
 		return err
 	}
@@ -111,26 +111,60 @@ func (c *CartCache) RemoveItem(ctx context.Context, sessionID string, productID 
 	for i, item := range items {
 		if item.ProductID == productID {
 			items = append(items[:i], items[i+1:]...)
-			return c.SetCart(ctx, sessionID, items)
+			return c.SetGuestCart(ctx, sessionID, items)
 		}
 	}
 
-	return nil // Товара нет — ничего не делаем
+	return nil
 }
 
-func (c *CartCache) Clear(ctx context.Context, sessionID string) error {
-	return c.rdb.Del(ctx, cartKey(sessionID)).Err()
+func (c *CartCache) ClearGuestCart(ctx context.Context, sessionID string) error {
+	return c.rdb.Del(ctx, guestCartKey(sessionID)).Err()
 }
 
-func (c *CartCache) GetAndClear(ctx context.Context, sessionID string) ([]GuestCartItem, error) {
-	items, err := c.GetCart(ctx, sessionID)
+func (c *CartCache) GetAndClearGuestCart(ctx context.Context, sessionID string) ([]CartItem, error) {
+	items, err := c.GetGuestCart(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(items) > 0 {
-		_ = c.Clear(ctx, sessionID)
+		_ = c.ClearGuestCart(ctx, sessionID)
 	}
 
 	return items, nil
+}
+
+func userCartKey(userID int) string {
+	return fmt.Sprintf("%s%d", userCartKeyPrefix, userID)
+}
+
+func (c *CartCache) GetUserCart(ctx context.Context, userID int) ([]CartItem, error) {
+	data, err := c.rdb.Get(ctx, userCartKey(userID)).Bytes()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var items []CartItem
+	if err := json.Unmarshal(data, &items); err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
+func (c *CartCache) SetUserCart(ctx context.Context, userID int, items []CartItem) error {
+	data, err := json.Marshal(items)
+	if err != nil {
+		return err
+	}
+
+	return c.rdb.Set(ctx, userCartKey(userID), data, userCartTTL).Err()
+}
+
+func (c *CartCache) InvalidateUserCart(ctx context.Context, userID int) error {
+	return c.rdb.Del(ctx, userCartKey(userID)).Err()
 }

@@ -19,27 +19,24 @@ func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Eng
 	r.Use(gin.Recovery())
 	r.Use(loggerMiddleware())
 
-	// Repositories
 	categoryRepo := repository.NewCategoryRepository(db)
 	productRepo := repository.NewProductRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	cartRepo := repository.NewCartRepository(db)
 
-	// Cache
 	categoryCache := cache.NewCategoryCache(redisClient)
 	cartCache := cache.NewCartCache(redisClient)
 
-	// Services
 	authService := service.NewAuthService(userRepo, jwtSecret)
+	cartService := service.NewCartService(cartRepo, productRepo, cartCache)
 
-	// Handlers
 	categoryHandler := NewCategoryHandler(categoryRepo, categoryCache)
 	productHandler := NewProductHandler(productRepo)
-	cartHandler := NewCartHandler(cartCache)
+	cartHandler := NewCartHandler(cartService)
 	orderHandler := NewOrderHandler()
 	authHandler := NewAuthHandler(authService)
 	recommendationHandler := NewRecommendationHandler()
 
-	// Middleware
 	authMiddleware := middleware.Auth(authService)
 
 	r.GET("/health", func(c *gin.Context) {
@@ -48,42 +45,34 @@ func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Eng
 
 	api := r.Group("/api")
 	{
-		// Products (public)
 		api.GET("/products", productHandler.GetProducts)
 		api.GET("/products/:id", productHandler.GetProduct)
 
-		// Categories (public)
 		api.GET("/categories", categoryHandler.GetCategories)
 		api.GET("/categories/tree", categoryHandler.GetCategoryTree)
 		api.GET("/categories/:id", categoryHandler.GetCategory)
 		api.GET("/categories/:id/children", categoryHandler.GetCategoryChildren)
 
-		// Auth (public)
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
 
-		// Protected routes
+		api.GET("/cart", cartHandler.GetCart)
+		api.POST("/cart/items", cartHandler.AddToCart)
+		api.PUT("/cart/items/:id", cartHandler.UpdateCartItem)
+		api.DELETE("/cart/items/:id", cartHandler.DeleteCartItem)
+		api.DELETE("/cart", cartHandler.ClearCart)
+
 		protected := api.Group("")
 		protected.Use(authMiddleware)
 		{
-			// Profile
 			protected.GET("/auth/profile", authHandler.Profile)
 
-			// Cart
-			protected.GET("/cart", cartHandler.GetCart)
-			protected.POST("/cart/items", cartHandler.AddToCart)
-			protected.PUT("/cart/items/:id", cartHandler.UpdateCartItem)
-			protected.DELETE("/cart/items/:id", cartHandler.DeleteCartItem)
-
-			// Orders
 			protected.GET("/orders", orderHandler.GetOrders)
 			protected.POST("/orders", orderHandler.CreateOrder)
 
-			// Recommendations feedback
 			protected.POST("/recommendations/feedback", recommendationHandler.PostFeedback)
 		}
 
-		// Recommendations (public)
 		api.GET("/recommendations/:product_id", recommendationHandler.GetRecommendations)
 	}
 
