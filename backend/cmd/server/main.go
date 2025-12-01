@@ -38,7 +38,7 @@ func main() {
 	}
 
 	gin.SetMode(gin.ReleaseMode)
-	router := handler.NewRouter(db)
+	router := handler.NewRouter(db, cfg.JWT.Secret)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),

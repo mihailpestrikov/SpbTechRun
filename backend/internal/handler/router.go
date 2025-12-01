@@ -8,23 +8,34 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mpstrkv/spbtechrun/internal/middleware"
 	"github.com/mpstrkv/spbtechrun/internal/repository"
+	"github.com/mpstrkv/spbtechrun/internal/service"
 )
 
-func NewRouter(db *sql.DB) *gin.Engine {
+func NewRouter(db *sql.DB, jwtSecret string) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(loggerMiddleware())
 
+	// Repositories
 	categoryRepo := repository.NewCategoryRepository(db)
 	productRepo := repository.NewProductRepository(db)
+	userRepo := repository.NewUserRepository(db)
 
+	// Services
+	authService := service.NewAuthService(userRepo, jwtSecret)
+
+	// Handlers
 	categoryHandler := NewCategoryHandler(categoryRepo)
 	productHandler := NewProductHandler(productRepo)
 	cartHandler := NewCartHandler()
 	orderHandler := NewOrderHandler()
-	authHandler := NewAuthHandler()
+	authHandler := NewAuthHandler(authService)
 	recommendationHandler := NewRecommendationHandler()
+
+	// Middleware
+	authMiddleware := middleware.Auth(authService)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -32,34 +43,43 @@ func NewRouter(db *sql.DB) *gin.Engine {
 
 	api := r.Group("/api")
 	{
-		// Products
+		// Products (public)
 		api.GET("/products", productHandler.GetProducts)
 		api.GET("/products/:id", productHandler.GetProduct)
 
-		// Categories
+		// Categories (public)
 		api.GET("/categories", categoryHandler.GetCategories)
 		api.GET("/categories/tree", categoryHandler.GetCategoryTree)
 		api.GET("/categories/:id", categoryHandler.GetCategory)
 		api.GET("/categories/:id/children", categoryHandler.GetCategoryChildren)
 
-		// Cart
-		api.GET("/cart", cartHandler.GetCart)
-		api.POST("/cart/items", cartHandler.AddToCart)
-		api.PUT("/cart/items/:id", cartHandler.UpdateCartItem)
-		api.DELETE("/cart/items/:id", cartHandler.DeleteCartItem)
-
-		// Orders
-		api.GET("/orders", orderHandler.GetOrders)
-		api.POST("/orders", orderHandler.CreateOrder)
-
-		// Auth
+		// Auth (public)
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
-		api.GET("/auth/profile", authHandler.Profile)
 
-		// Recommendations
+		// Protected routes
+		protected := api.Group("")
+		protected.Use(authMiddleware)
+		{
+			// Profile
+			protected.GET("/auth/profile", authHandler.Profile)
+
+			// Cart
+			protected.GET("/cart", cartHandler.GetCart)
+			protected.POST("/cart/items", cartHandler.AddToCart)
+			protected.PUT("/cart/items/:id", cartHandler.UpdateCartItem)
+			protected.DELETE("/cart/items/:id", cartHandler.DeleteCartItem)
+
+			// Orders
+			protected.GET("/orders", orderHandler.GetOrders)
+			protected.POST("/orders", orderHandler.CreateOrder)
+
+			// Recommendations feedback
+			protected.POST("/recommendations/feedback", recommendationHandler.PostFeedback)
+		}
+
+		// Recommendations (public)
 		api.GET("/recommendations/:product_id", recommendationHandler.GetRecommendations)
-		api.POST("/recommendations/feedback", recommendationHandler.PostFeedback)
 	}
 
 	return r
