@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/mpstrkv/spbtechrun/internal/config"
+	"github.com/mpstrkv/spbtechrun/internal/database"
 	"github.com/mpstrkv/spbtechrun/internal/handler"
 )
 
@@ -24,8 +25,20 @@ func main() {
 	cfg := config.MustLoad()
 	log.Info("config loaded")
 
+	db, err := database.NewPostgres(cfg.Postgres.DSN())
+	if err != nil {
+		log.Error("failed to connect to postgres", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	if err := database.RunMigrations(db, "migrations"); err != nil {
+		log.Error("failed to run migrations", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
 	gin.SetMode(gin.ReleaseMode)
-	router := handler.NewRouter()
+	router := handler.NewRouter(db)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),

@@ -174,6 +174,22 @@ CREATE INDEX idx_cart_user ON cart_items(user_id);
 CREATE INDEX idx_cart_session ON cart_items(session_id);
 CREATE INDEX idx_orders_user ON orders(user_id);
 CREATE INDEX idx_feedback_stats_product ON product_feedback_stats(product_id);
+
+-- Скидки/акции
+CREATE TABLE promos (
+    id SERIAL PRIMARY KEY,
+    promo_id INTEGER NOT NULL,
+    product_id INTEGER REFERENCES products(id) NOT NULL,
+    promo_type VARCHAR(100),          -- 'bonus card', 'sale', etc.
+    discount_price DECIMAL(10,2),     -- цена со скидкой
+    start_date DATE,
+    end_date DATE,
+    description VARCHAR(500),
+    url VARCHAR(500)
+);
+
+CREATE INDEX idx_promos_product ON promos(product_id);
+CREATE INDEX idx_promos_dates ON promos(start_date, end_date);
 ```
 
 ## API эндпоинты
@@ -220,6 +236,13 @@ GET  /api/auth/me
 ```
 GET  /api/recommendations/:product_id
 POST /api/recommendations/feedback
+```
+
+### Скидки
+```
+GET  /api/promos                  # Активные акции
+GET  /api/promos/products         # Товары со скидками
+GET  /api/products/:id/promo      # Скидка на конкретный товар
 ```
 
 

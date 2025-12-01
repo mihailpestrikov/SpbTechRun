@@ -1,17 +1,30 @@
 package handler
 
 import (
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/mpstrkv/spbtechrun/internal/repository"
 )
 
-func NewRouter() *gin.Engine {
+func NewRouter(db *sql.DB) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(loggerMiddleware())
+
+	categoryRepo := repository.NewCategoryRepository(db)
+	productRepo := repository.NewProductRepository(db)
+
+	categoryHandler := NewCategoryHandler(categoryRepo)
+	productHandler := NewProductHandler(productRepo)
+	cartHandler := NewCartHandler()
+	orderHandler := NewOrderHandler()
+	authHandler := NewAuthHandler()
+	recommendationHandler := NewRecommendationHandler()
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -19,27 +32,34 @@ func NewRouter() *gin.Engine {
 
 	api := r.Group("/api")
 	{
-		api.GET("/products", notImplemented)
-		api.GET("/products/:id", notImplemented)
-		api.GET("/products/search", notImplemented)
+		// Products
+		api.GET("/products", productHandler.GetProducts)
+		api.GET("/products/:id", productHandler.GetProduct)
 
-		api.GET("/categories", notImplemented)
-		api.GET("/categories/tree", notImplemented)
+		// Categories
+		api.GET("/categories", categoryHandler.GetCategories)
+		api.GET("/categories/tree", categoryHandler.GetCategoryTree)
+		api.GET("/categories/:id", categoryHandler.GetCategory)
+		api.GET("/categories/:id/children", categoryHandler.GetCategoryChildren)
 
-		api.GET("/cart", notImplemented)
-		api.POST("/cart/items", notImplemented)
-		api.PUT("/cart/items/:id", notImplemented)
-		api.DELETE("/cart/items/:id", notImplemented)
+		// Cart
+		api.GET("/cart", cartHandler.GetCart)
+		api.POST("/cart/items", cartHandler.AddToCart)
+		api.PUT("/cart/items/:id", cartHandler.UpdateCartItem)
+		api.DELETE("/cart/items/:id", cartHandler.DeleteCartItem)
 
-		api.GET("/orders", notImplemented)
-		api.POST("/orders", notImplemented)
+		// Orders
+		api.GET("/orders", orderHandler.GetOrders)
+		api.POST("/orders", orderHandler.CreateOrder)
 
-		api.POST("/auth/register", notImplemented)
-		api.POST("/auth/login", notImplemented)
-		api.GET("/auth/me", notImplemented)
+		// Auth
+		api.POST("/auth/register", authHandler.Register)
+		api.POST("/auth/login", authHandler.Login)
+		api.GET("/auth/profile", authHandler.Profile)
 
-		api.GET("/recommendations/:product_id", notImplemented)
-		api.POST("/recommendations/feedback", notImplemented)
+		// Recommendations
+		api.GET("/recommendations/:product_id", recommendationHandler.GetRecommendations)
+		api.POST("/recommendations/feedback", recommendationHandler.PostFeedback)
 	}
 
 	return r
@@ -56,8 +76,4 @@ func loggerMiddleware() gin.HandlerFunc {
 			slog.Duration("latency", time.Since(start)),
 		)
 	}
-}
-
-func notImplemented(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
 }
