@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mpstrkv/spbtechrun/internal/cache"
 	"github.com/mpstrkv/spbtechrun/internal/config"
 	"github.com/mpstrkv/spbtechrun/internal/database"
 	"github.com/mpstrkv/spbtechrun/internal/handler"
@@ -37,8 +38,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	redisClient, err := cache.NewClient(cfg.Redis.Addr())
+	if err != nil {
+		log.Error("failed to connect to redis", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer redisClient.Close()
+	log.Info("redis connected", slog.String("addr", cfg.Redis.Addr()))
+
 	gin.SetMode(gin.ReleaseMode)
-	router := handler.NewRouter(db, cfg.JWT.Secret)
+	router := handler.NewRouter(db, cfg.JWT.Secret, redisClient)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),

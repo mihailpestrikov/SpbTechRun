@@ -6,15 +6,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mpstrkv/spbtechrun/internal/cache"
 	"github.com/mpstrkv/spbtechrun/internal/dto"
 )
 
 type CartHandler struct {
-	// TODO: добавить CartRepository и ProductRepository
+	cache *cache.CartCache
+	// TODO: добавить CartRepository и ProductRepository для авторизованных пользователей
 }
 
-func NewCartHandler() *CartHandler {
-	return &CartHandler{}
+func NewCartHandler(cartCache *cache.CartCache) *CartHandler {
+	return &CartHandler{cache: cartCache}
 }
 
 func (h *CartHandler) GetCart(c *gin.Context) {

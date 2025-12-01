@@ -8,12 +8,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mpstrkv/spbtechrun/internal/cache"
 	"github.com/mpstrkv/spbtechrun/internal/middleware"
 	"github.com/mpstrkv/spbtechrun/internal/repository"
 	"github.com/mpstrkv/spbtechrun/internal/service"
 )
 
-func NewRouter(db *sql.DB, jwtSecret string) *gin.Engine {
+func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(loggerMiddleware())
@@ -23,13 +24,17 @@ func NewRouter(db *sql.DB, jwtSecret string) *gin.Engine {
 	productRepo := repository.NewProductRepository(db)
 	userRepo := repository.NewUserRepository(db)
 
+	// Cache
+	categoryCache := cache.NewCategoryCache(redisClient)
+	cartCache := cache.NewCartCache(redisClient)
+
 	// Services
 	authService := service.NewAuthService(userRepo, jwtSecret)
 
 	// Handlers
-	categoryHandler := NewCategoryHandler(categoryRepo)
+	categoryHandler := NewCategoryHandler(categoryRepo, categoryCache)
 	productHandler := NewProductHandler(productRepo)
-	cartHandler := NewCartHandler()
+	cartHandler := NewCartHandler(cartCache)
 	orderHandler := NewOrderHandler()
 	authHandler := NewAuthHandler(authService)
 	recommendationHandler := NewRecommendationHandler()

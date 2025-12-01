@@ -1,21 +1,24 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mpstrkv/spbtechrun/internal/cache"
 	"github.com/mpstrkv/spbtechrun/internal/dto"
 	"github.com/mpstrkv/spbtechrun/internal/repository"
 )
 
 type CategoryHandler struct {
-	repo *repository.CategoryRepository
+	repo  *repository.CategoryRepository
+	cache *cache.CategoryCache
 }
 
-func NewCategoryHandler(repo *repository.CategoryRepository) *CategoryHandler {
-	return &CategoryHandler{repo: repo}
+func NewCategoryHandler(repo *repository.CategoryRepository, cache *cache.CategoryCache) *CategoryHandler {
+	return &CategoryHandler{repo: repo, cache: cache}
 }
 
 func (h *CategoryHandler) GetCategories(c *gin.Context) {
@@ -29,13 +32,35 @@ func (h *CategoryHandler) GetCategories(c *gin.Context) {
 }
 
 func (h *CategoryHandler) GetCategoryTree(c *gin.Context) {
-	categories, err := h.repo.GetAll(c.Request.Context())
+	ctx := c.Request.Context()
+
+	// Пробуем получить из кэша
+	if h.cache != nil {
+		tree, err := h.cache.GetTree(ctx)
+		if err != nil {
+			slog.Warn("failed to get category tree from cache", slog.String("error", err.Error()))
+		} else if tree != nil {
+			c.JSON(http.StatusOK, tree)
+			return
+		}
+	}
+
+	// Кэш пуст — получаем из БД
+	categories, err := h.repo.GetAll(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	tree := dto.BuildCategoryTree(categories)
+
+	// Сохраняем в кэш
+	if h.cache != nil {
+		if err := h.cache.SetTree(ctx, tree); err != nil {
+			slog.Warn("failed to cache category tree", slog.String("error", err.Error()))
+		}
+	}
+
 	c.JSON(http.StatusOK, tree)
 }
 
