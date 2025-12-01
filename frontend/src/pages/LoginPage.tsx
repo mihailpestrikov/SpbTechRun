@@ -24,8 +24,13 @@ export function LoginPage() {
       const { user, token } = await login(email, password)
       setAuth(user, token)
       navigate('/')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка входа')
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosErr = err as { response?: { data?: { error?: string } } }
+        setError(axiosErr.response?.data?.error || 'Ошибка входа')
+      } else {
+        setError('Ошибка входа')
+      }
     } finally {
       setLoading(false)
     }

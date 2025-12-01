@@ -32,8 +32,13 @@ export function RegisterPage() {
       const { user, token } = await register(name, email, password)
       setAuth(user, token)
       navigate('/')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка регистрации')
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosErr = err as { response?: { data?: { error?: string } } }
+        setError(axiosErr.response?.data?.error || 'Ошибка регистрации')
+      } else {
+        setError('Ошибка регистрации')
+      }
     } finally {
       setLoading(false)
     }

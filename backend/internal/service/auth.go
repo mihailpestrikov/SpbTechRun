@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	ErrUserExists         = errors.New("user already exists")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrInvalidToken       = errors.New("invalid token")
+	ErrUserExists      = errors.New("user already exists")
+	ErrUserNotFound    = errors.New("user not found")
+	ErrInvalidPassword = errors.New("invalid password")
+	ErrInvalidToken    = errors.New("invalid token")
 )
 
 type Claims struct {
@@ -75,13 +76,13 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*model
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, "", ErrInvalidCredentials
+			return nil, "", ErrUserNotFound
 		}
 		return nil, "", err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return nil, "", ErrInvalidCredentials
+		return nil, "", ErrInvalidPassword
 	}
 
 	token, err := s.generateToken(user.ID)
