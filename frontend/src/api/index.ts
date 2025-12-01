@@ -1,4 +1,6 @@
 export * from './products'
+export * from './categories'
+export * from './cart'
 export * from './recommendations'
 export * from './auth'
 export * from './orders'

@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input } from '@/components/ui/input'
-import { useCategoryTree, useCategorySearch } from '@/hooks'
+import { useCategoryTree, useCategories } from '@/hooks'
 import { CategoryTreeItem } from './CategoryTreeItem'
 
 interface CatalogModalProps {
@@ -13,7 +13,13 @@ export function CatalogModal({ isOpen, onClose }: CatalogModalProps) {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const { data: categoryTree, isLoading } = useCategoryTree()
-  const { data: searchResults } = useCategorySearch(searchQuery)
+  const { data: categories } = useCategories()
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery || searchQuery.length < 2 || !categories) return []
+    const query = searchQuery.toLowerCase()
+    return categories.filter((c) => c.name.toLowerCase().includes(query))
+  }, [searchQuery, categories])
 
   const handleSelectCategory = (categoryId: number) => {
     navigate(`/?category=${categoryId}`)
@@ -54,7 +60,7 @@ export function CatalogModal({ isOpen, onClose }: CatalogModalProps) {
             <div className="text-center py-8 text-gray-500">Загрузка...</div>
           ) : searchQuery.length >= 2 ? (
             <div>
-              {searchResults && searchResults.length > 0 ? (
+              {searchResults.length > 0 ? (
                 <div className="space-y-1">
                   {searchResults.map((cat) => (
                     <button

@@ -122,6 +122,46 @@ func (r *ProductRepository) GetByCategory(ctx context.Context, categoryID int, l
 	})
 }
 
+func (r *ProductRepository) GetByIDs(ctx context.Context, ids []int) (map[int]model.Product, error) {
+	if len(ids) == 0 {
+		return make(map[int]model.Product), nil
+	}
+
+	query, args, err := r.sq.
+		Select(
+			"id", "category_id", "name", "url", "price", "currency",
+			"picture", "vendor", "country", "description", "market_description",
+			"weight", "available", "params", "created_at",
+		).
+		From("products").
+		Where(sq.Eq{"id": ids}).
+		ToSql()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	products := make(map[int]model.Product)
+	for rows.Next() {
+		var p model.Product
+		if err := rows.Scan(
+			&p.ID, &p.CategoryID, &p.Name, &p.URL, &p.Price, &p.Currency,
+			&p.Picture, &p.Vendor, &p.Country, &p.Description, &p.MarketDescription,
+			&p.Weight, &p.Available, &p.Params, &p.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		products[p.ID] = p
+	}
+
+	return products, rows.Err()
+}
+
 func (r *ProductRepository) Count(ctx context.Context, filter model.ProductFilter) (int, error) {
 	builder := r.sq.
 		Select("COUNT(*)").

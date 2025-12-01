@@ -51,31 +51,54 @@ func (s *CartService) GetCart(ctx context.Context, userID *int, sessionID *strin
 			return nil, err
 		}
 
-		for _, item := range guestItems {
-			product, err := s.productRepo.GetByID(ctx, item.ProductID)
-			if err != nil {
-				continue
+		if len(guestItems) > 0 {
+			productIDs := make([]int, 0, len(guestItems))
+			for _, item := range guestItems {
+				productIDs = append(productIDs, item.ProductID)
 			}
 
-			result.Items = append(result.Items, CartItemWithProduct{
-				Item: model.CartItem{
-					ProductID: item.ProductID,
-					Quantity:  item.Quantity,
-					SessionID: sessionID,
-				},
-				Product: *product,
-			})
-			result.Total += product.Price * float64(item.Quantity)
+			products, err := s.productRepo.GetByIDs(ctx, productIDs)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, item := range guestItems {
+				product, ok := products[item.ProductID]
+				if !ok {
+					continue
+				}
+
+				result.Items = append(result.Items, CartItemWithProduct{
+					Item: model.CartItem{
+						ID:        item.ProductID,
+						ProductID: item.ProductID,
+						Quantity:  item.Quantity,
+						SessionID: sessionID,
+					},
+					Product: product,
+				})
+				result.Total += product.Price * float64(item.Quantity)
+			}
 		}
 		return result, nil
 	}
 
 	if userID != nil {
 		cachedItems, err := s.cartCache.GetUserCart(ctx, *userID)
-		if err == nil && cachedItems != nil {
+		if err == nil && cachedItems != nil && len(cachedItems) > 0 {
+			productIDs := make([]int, 0, len(cachedItems))
 			for _, item := range cachedItems {
-				product, err := s.productRepo.GetByID(ctx, item.ProductID)
-				if err != nil {
+				productIDs = append(productIDs, item.ProductID)
+			}
+
+			products, err := s.productRepo.GetByIDs(ctx, productIDs)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, item := range cachedItems {
+				product, ok := products[item.ProductID]
+				if !ok {
 					continue
 				}
 
@@ -86,7 +109,7 @@ func (s *CartService) GetCart(ctx context.Context, userID *int, sessionID *strin
 						ProductID: item.ProductID,
 						Quantity:  item.Quantity,
 					},
-					Product: *product,
+					Product: product,
 				})
 				result.Total += product.Price * float64(item.Quantity)
 			}
@@ -98,27 +121,37 @@ func (s *CartService) GetCart(ctx context.Context, userID *int, sessionID *strin
 			return nil, err
 		}
 
-		cacheItems := make([]cache.CartItem, 0, len(items))
-		for _, item := range items {
-			product, err := s.productRepo.GetByID(ctx, item.ProductID)
-			if err != nil {
-				continue
+		if len(items) > 0 {
+			productIDs := make([]int, 0, len(items))
+			for _, item := range items {
+				productIDs = append(productIDs, item.ProductID)
 			}
 
-			result.Items = append(result.Items, CartItemWithProduct{
-				Item:    item,
-				Product: *product,
-			})
-			result.Total += product.Price * float64(item.Quantity)
+			products, err := s.productRepo.GetByIDs(ctx, productIDs)
+			if err != nil {
+				return nil, err
+			}
 
-			cacheItems = append(cacheItems, cache.CartItem{
-				ID:        item.ID,
-				ProductID: item.ProductID,
-				Quantity:  item.Quantity,
-			})
-		}
+			cacheItems := make([]cache.CartItem, 0, len(items))
+			for _, item := range items {
+				product, ok := products[item.ProductID]
+				if !ok {
+					continue
+				}
 
-		if len(cacheItems) > 0 {
+				result.Items = append(result.Items, CartItemWithProduct{
+					Item:    item,
+					Product: product,
+				})
+				result.Total += product.Price * float64(item.Quantity)
+
+				cacheItems = append(cacheItems, cache.CartItem{
+					ID:        item.ID,
+					ProductID: item.ProductID,
+					Quantity:  item.Quantity,
+				})
+			}
+
 			_ = s.cartCache.SetUserCart(ctx, *userID, cacheItems)
 		}
 

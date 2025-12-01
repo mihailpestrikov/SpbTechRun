@@ -8,22 +8,22 @@ interface AuthState {
   isAuthenticated: boolean
   login: (user: User, token: string) => void
   logout: () => void
+  getToken: () => string | null
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
       login: (user, token) => {
-        localStorage.setItem('token', token)
         set({ user, token, isAuthenticated: true })
       },
       logout: () => {
-        localStorage.removeItem('token')
         set({ user: null, token: null, isAuthenticated: false })
       },
+      getToken: () => get().token,
     }),
     { name: 'auth-store' }
   )

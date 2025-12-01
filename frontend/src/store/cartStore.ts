@@ -1,52 +1,80 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type { Product, CartItem } from '@/types'
+import * as cartApi from '@/api/cart'
+import type { CartItem } from '@/types'
 
 interface CartState {
   items: CartItem[]
-  addItem: (product: Product) => void
-  removeItem: (productId: number) => void
-  updateQuantity: (productId: number, quantity: number) => void
-  clear: () => void
-  totalPrice: () => number
+  total: number
+  loading: boolean
+  error: string | null
+
+  fetchCart: () => Promise<void>
+  addItem: (productId: number, quantity?: number) => Promise<void>
+  updateQuantity: (itemId: number, quantity: number) => Promise<void>
+  removeItem: (itemId: number) => Promise<void>
+  clear: () => Promise<void>
   totalItems: () => number
 }
 
-export const useCartStore = create<CartState>()(
-  persist(
-    (set, get) => ({
-      items: [],
-      addItem: (product) => {
-        const items = get().items
-        const existing = items.find((i) => i.product.id === product.id)
-        if (existing) {
-          set({
-            items: items.map((i) =>
-              i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
-            ),
-          })
-        } else {
-          set({ items: [...items, { product, quantity: 1 }] })
-        }
-      },
-      removeItem: (productId) => {
-        set({ items: get().items.filter((i) => i.product.id !== productId) })
-      },
-      updateQuantity: (productId, quantity) => {
-        if (quantity <= 0) {
-          get().removeItem(productId)
-          return
-        }
-        set({
-          items: get().items.map((i) =>
-            i.product.id === productId ? { ...i, quantity } : i
-          ),
-        })
-      },
-      clear: () => set({ items: [] }),
-      totalPrice: () => get().items.reduce((sum, i) => sum + i.product.price * i.quantity, 0),
-      totalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
-    }),
-    { name: 'cart-store' }
-  )
-)
+export const useCartStore = create<CartState>()((set, get) => ({
+  items: [],
+  total: 0,
+  loading: false,
+  error: null,
+
+  fetchCart: async () => {
+    set({ loading: true, error: null })
+    try {
+      const cart = await cartApi.getCart()
+      set({ items: cart.items, total: cart.total, loading: false })
+    } catch (err) {
+      set({ error: 'Failed to load cart', loading: false })
+    }
+  },
+
+  addItem: async (productId, quantity = 1) => {
+    set({ loading: true, error: null })
+    try {
+      await cartApi.addToCart(productId, quantity)
+      await get().fetchCart()
+    } catch (err) {
+      set({ error: 'Failed to add item', loading: false })
+    }
+  },
+
+  updateQuantity: async (itemId, quantity) => {
+    set({ loading: true, error: null })
+    try {
+      if (quantity <= 0) {
+        await cartApi.removeCartItem(itemId)
+      } else {
+        await cartApi.updateCartItem(itemId, quantity)
+      }
+      await get().fetchCart()
+    } catch (err) {
+      set({ error: 'Failed to update item', loading: false })
+    }
+  },
+
+  removeItem: async (itemId) => {
+    set({ loading: true, error: null })
+    try {
+      await cartApi.removeCartItem(itemId)
+      await get().fetchCart()
+    } catch (err) {
+      set({ error: 'Failed to remove item', loading: false })
+    }
+  },
+
+  clear: async () => {
+    set({ loading: true, error: null })
+    try {
+      await cartApi.clearCart()
+      set({ items: [], total: 0, loading: false })
+    } catch (err) {
+      set({ error: 'Failed to clear cart', loading: false })
+    }
+  },
+
+  totalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
+}))

@@ -52,7 +52,7 @@ export function OrderHistoryPage() {
                   <div>
                     <h3 className="font-semibold text-gray-800">Заказ #{order.id}</h3>
                     <p className="text-sm text-gray-500">
-                      {new Date(order.createdAt).toLocaleDateString('ru-RU', {
+                      {new Date(order.created_at).toLocaleDateString('ru-RU', {
                         day: 'numeric',
                         month: 'long',
                         year: 'numeric',
@@ -60,7 +60,7 @@ export function OrderHistoryPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-800">{order.totalPrice} ₽</p>
+                    <p className="font-semibold text-gray-800">{order.total_price} ₽</p>
                     <Badge variant={order.status === 'completed' ? 'default' : 'secondary'} className="mt-1">
                       {order.status === 'completed' ? 'Завершён' : order.status === 'pending' ? 'В обработке' : 'Отменён'}
                     </Badge>

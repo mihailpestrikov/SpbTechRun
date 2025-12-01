@@ -3,7 +3,6 @@ export {
   useProduct,
   useCategories,
   useCategoryTree,
-  useCategorySearch,
   useProductSearch,
   useChildCategories,
 } from './useProducts'

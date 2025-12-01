@@ -1,10 +1,27 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PageLayout } from '@/components/layout'
 import { ProductGrid } from '@/components/product'
 import { useProducts, useCategories } from '@/hooks'
+import { useCartStore } from '@/store'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import type { ProductFilter } from '@/types'
+
+const ITEMS_PER_PAGE = 21
+const DEBOUNCE_MS = 700
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+
+  return debouncedValue
+}
 
 export function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -14,8 +31,30 @@ export function HomePage() {
 
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
+  const [page, setPage] = useState(1)
 
-  const { data: productsData, isLoading: productsLoading } = useProducts(categoryId)
+  const debouncedMinPrice = useDebounce(minPrice, DEBOUNCE_MS)
+  const debouncedMaxPrice = useDebounce(maxPrice, DEBOUNCE_MS)
+
+  const { fetchCart } = useCartStore()
+
+  useEffect(() => {
+    fetchCart()
+  }, [fetchCart])
+
+  useEffect(() => {
+    setPage(1)
+  }, [categoryId, debouncedMinPrice, debouncedMaxPrice])
+
+  const filter: ProductFilter = useMemo(() => ({
+    category_id: categoryId,
+    min_price: debouncedMinPrice ? parseFloat(debouncedMinPrice) : undefined,
+    max_price: debouncedMaxPrice ? parseFloat(debouncedMaxPrice) : undefined,
+    limit: ITEMS_PER_PAGE,
+    offset: (page - 1) * ITEMS_PER_PAGE,
+  }), [categoryId, debouncedMinPrice, debouncedMaxPrice, page])
+
+  const { data: productsData, isLoading: productsLoading } = useProducts(filter)
   const { data: categories } = useCategories()
 
   const currentCategory = useMemo(() => {
@@ -29,20 +68,10 @@ export function HomePage() {
     let current: typeof currentCategory | undefined = currentCategory
     while (current) {
       path.unshift(current)
-      current = categories.find((c) => c.id === current?.parentId)
+      current = categories.find((c) => c.id === current?.parent_id)
     }
     return path
   }, [currentCategory, categories])
-
-  const filteredProducts = useMemo(() => {
-    if (!productsData?.items) return []
-
-    return productsData.items.filter((product) => {
-      const min = minPrice ? parseFloat(minPrice) : 0
-      const max = maxPrice ? parseFloat(maxPrice) : Infinity
-      return product.price >= min && product.price <= max
-    })
-  }, [productsData?.items, minPrice, maxPrice])
 
   const handleClearCategory = () => {
     setSearchParams({})
@@ -108,10 +137,100 @@ export function HomePage() {
               <p className="text-gray-600 text-sm">Здесь будет карусель рекомендаций</p>
             </div>
 
-            <ProductGrid products={filteredProducts} isLoading={productsLoading} />
+            <ProductGrid products={productsData?.products || []} isLoading={productsLoading} />
+
+            {productsData && productsData.total > 0 && (
+              <div className="mt-6">
+                <p className="text-gray-500 text-sm mb-4">
+                  Показано {Math.min(page * ITEMS_PER_PAGE, productsData.total)} из {productsData.total} товаров
+                </p>
+
+                {productsData.total > ITEMS_PER_PAGE && (
+                  <Pagination
+                    currentPage={page}
+                    totalPages={Math.ceil(productsData.total / ITEMS_PER_PAGE)}
+                    onPageChange={setPage}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
     </PageLayout>
+  )
+}
+
+interface PaginationProps {
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+}
+
+function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
+  const getPageNumbers = () => {
+    const pages: (number | 'ellipsis')[] = []
+    const showPages = 5
+
+    if (totalPages <= showPages + 2) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      pages.push(1)
+
+      let start = Math.max(2, currentPage - 1)
+      let end = Math.min(totalPages - 1, currentPage + 1)
+
+      if (currentPage <= 3) {
+        end = showPages - 1
+      } else if (currentPage >= totalPages - 2) {
+        start = totalPages - showPages + 2
+      }
+
+      if (start > 2) pages.push('ellipsis')
+      for (let i = start; i <= end; i++) pages.push(i)
+      if (end < totalPages - 1) pages.push('ellipsis')
+
+      pages.push(totalPages)
+    }
+
+    return pages
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+      >
+        ←
+      </Button>
+
+      {getPageNumbers().map((p, idx) =>
+        p === 'ellipsis' ? (
+          <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+        ) : (
+          <Button
+            key={p}
+            variant={p === currentPage ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onPageChange(p)}
+            className={p === currentPage ? 'bg-red-700 hover:bg-red-800' : ''}
+          >
+            {p}
+          </Button>
+        )
+      )}
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+      >
+        →
+      </Button>
+    </div>
   )
 }

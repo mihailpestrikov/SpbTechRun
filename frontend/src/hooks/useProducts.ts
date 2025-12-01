@@ -1,18 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  getProducts,
-  getProduct,
-  getCategories,
-  getCategoryTree,
-  searchCategories,
-  searchProducts,
-  getChildCategories,
-} from '@/api'
+import { getProducts, getProduct, searchProducts } from '@/api/products'
+import { getCategories, getCategoryTree, getCategoryChildren } from '@/api/categories'
+import type { ProductFilter } from '@/types'
 
-export function useProducts(categoryId?: number) {
+export function useProducts(filter?: ProductFilter) {
   return useQuery({
-    queryKey: ['products', categoryId],
-    queryFn: () => getProducts({ categoryId }),
+    queryKey: ['products', filter],
+    queryFn: () => getProducts(filter),
   })
 }
 
@@ -41,16 +35,8 @@ export function useCategoryTree() {
 export function useChildCategories(parentId: number | null) {
   return useQuery({
     queryKey: ['childCategories', parentId],
-    queryFn: () => getChildCategories(parentId!),
+    queryFn: () => getCategoryChildren(parentId!),
     enabled: parentId !== null,
-  })
-}
-
-export function useCategorySearch(query: string) {
-  return useQuery({
-    queryKey: ['categorySearch', query],
-    queryFn: () => searchCategories(query),
-    enabled: query.length >= 2,
   })
 }
 

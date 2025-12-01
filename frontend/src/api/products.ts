@@ -1,84 +1,28 @@
-import type { Product, Category, CategoryWithChildren, PaginatedResponse } from '@/types'
-import { mockProducts, mockCategories } from './mock-data'
+import { apiClient } from './client'
+import type { Product, ProductListResponse, ProductFilter } from '@/types'
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+export async function getProducts(filter?: ProductFilter): Promise<ProductListResponse> {
+  const params = new URLSearchParams()
 
-function getAllDescendantIds(categoryId: number, categories: Category[]): number[] {
-  const ids: number[] = [categoryId]
-  const children = categories.filter((c) => c.parentId === categoryId)
-  for (const child of children) {
-    ids.push(...getAllDescendantIds(child.id, categories))
-  }
-  return ids
-}
+  if (filter?.category_id) params.append('category_id', String(filter.category_id))
+  if (filter?.min_price) params.append('min_price', String(filter.min_price))
+  if (filter?.max_price) params.append('max_price', String(filter.max_price))
+  if (filter?.vendor) params.append('vendor', filter.vendor)
+  if (filter?.available !== undefined) params.append('available', String(filter.available))
+  if (filter?.search) params.append('search', filter.search)
+  if (filter?.limit) params.append('limit', String(filter.limit))
+  if (filter?.offset) params.append('offset', String(filter.offset))
 
-export async function getProducts(params?: {
-  categoryId?: number
-  page?: number
-  limit?: number
-}): Promise<PaginatedResponse<Product>> {
-  await delay(300)
-  let items = [...mockProducts]
-  if (params?.categoryId) {
-    const categoryIds = getAllDescendantIds(params.categoryId, mockCategories)
-    items = items.filter((p) => categoryIds.includes(p.categoryId))
-  }
-  return {
-    items,
-    total: items.length,
-    page: params?.page || 1,
-    totalPages: 1,
-  }
+  const { data } = await apiClient.get<ProductListResponse>(`/products?${params.toString()}`)
+  return data
 }
 
 export async function getProduct(id: number): Promise<Product> {
-  await delay(200)
-  const product = mockProducts.find((p) => p.id === id)
-  if (!product) throw new Error('Product not found')
-  return product
+  const { data } = await apiClient.get<Product>(`/products/${id}`)
+  return data
 }
 
-export async function getCategories(): Promise<Category[]> {
-  await delay(100)
-  return mockCategories
-}
-
-export async function getRootCategories(): Promise<Category[]> {
-  await delay(100)
-  return mockCategories.filter((c) => c.parentId === null)
-}
-
-export async function getChildCategories(parentId: number): Promise<Category[]> {
-  await delay(100)
-  return mockCategories.filter((c) => c.parentId === parentId)
-}
-
-function buildCategoryTree(categories: Category[], parentId: number | null = null): CategoryWithChildren[] {
-  return categories
-    .filter((c) => c.parentId === parentId)
-    .map((c) => ({
-      ...c,
-      children: buildCategoryTree(categories, c.id),
-    }))
-}
-
-export async function getCategoryTree(): Promise<CategoryWithChildren[]> {
-  await delay(150)
-  return buildCategoryTree(mockCategories)
-}
-
-export async function searchCategories(query: string): Promise<Category[]> {
-  await delay(100)
-  const lowerQuery = query.toLowerCase()
-  return mockCategories.filter((c) => c.name.toLowerCase().includes(lowerQuery))
-}
-
-export async function searchProducts(query: string): Promise<Product[]> {
-  await delay(150)
-  const lowerQuery = query.toLowerCase()
-  return mockProducts.filter(
-    (p) =>
-      p.name.toLowerCase().includes(lowerQuery) ||
-      p.brand.toLowerCase().includes(lowerQuery)
-  )
+export async function searchProducts(query: string, limit = 10): Promise<Product[]> {
+  const { data } = await apiClient.get<ProductListResponse>(`/products?search=${encodeURIComponent(query)}&limit=${limit}`)
+  return data.products
 }
