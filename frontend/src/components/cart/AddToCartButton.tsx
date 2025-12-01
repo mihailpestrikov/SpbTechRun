@@ -15,7 +15,7 @@ export function AddToCartButton({ productId }: AddToCartButtonProps) {
       <Button
         onClick={() => addItem(productId)}
         disabled={loading}
-        className="w-full bg-red-700 hover:bg-red-800"
+        className="w-full h-9 bg-red-700 hover:bg-red-800"
       >
         В корзину
       </Button>
@@ -23,19 +23,19 @@ export function AddToCartButton({ productId }: AddToCartButtonProps) {
   }
 
   return (
-    <div className="flex items-center justify-between border border-red-700 rounded-md">
+    <div className="flex items-center justify-between border border-red-700 rounded-md h-9">
       <button
         onClick={() => updateQuantity(cartItem!.id, quantity - 1)}
         disabled={loading}
-        className="px-3 py-2 text-red-700 hover:bg-red-50 transition-colors rounded-l-md disabled:opacity-50"
+        className="px-3 h-full text-red-700 hover:bg-red-50 transition-colors rounded-l-md disabled:opacity-50"
       >
         −
       </button>
-      <span className="px-4 py-2 font-medium text-red-700">{quantity}</span>
+      <span className="px-4 font-medium text-red-700">{quantity}</span>
       <button
         onClick={() => updateQuantity(cartItem!.id, quantity + 1)}
         disabled={loading}
-        className="px-3 py-2 text-red-700 hover:bg-red-50 transition-colors rounded-r-md disabled:opacity-50"
+        className="px-3 h-full text-red-700 hover:bg-red-50 transition-colors rounded-r-md disabled:opacity-50"
       >
         +
       </button>

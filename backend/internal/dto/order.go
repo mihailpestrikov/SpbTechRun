@@ -51,5 +51,4 @@ func OrderToResponse(o *model.Order, items []model.OrderItem, products map[int]*
 }
 
 type CreateOrderRequest struct {
-	Address string `json:"address" binding:"required"`
 }

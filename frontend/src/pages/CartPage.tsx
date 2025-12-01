@@ -1,14 +1,16 @@
 import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PageLayout } from '@/components/layout'
-import { useCartStore } from '@/store'
+import { useCartStore, useAuthStore } from '@/store'
 import { useCreateOrder } from '@/hooks'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { capitalize } from '@/lib/utils'
 
 export function CartPage() {
   const navigate = useNavigate()
-  const { items, total, loading, updateQuantity, removeItem, clear, fetchCart } = useCartStore()
+  const { items, total, loading, updateQuantity, removeItem, fetchCart } = useCartStore()
+  const { isAuthenticated } = useAuthStore()
   const { mutate: createOrder, isPending } = useCreateOrder()
 
   useEffect(() => {
@@ -18,9 +20,11 @@ export function CartPage() {
   const handleOrder = () => {
     createOrder(undefined, {
       onSuccess: () => {
-        clear()
-        alert('Заказ оформлен!')
+        fetchCart()
         navigate('/orders')
+      },
+      onError: (error: Error) => {
+        alert(error.message || 'Ошибка при оформлении заказа')
       },
     })
   }
@@ -72,7 +76,7 @@ export function CartPage() {
                   )}
                   <div className="flex-1">
                     <Link to={`/product/${item.product_id}`} className="font-medium text-gray-800 hover:text-red-700">
-                      {item.product?.name || `Товар #${item.product_id}`}
+                      {capitalize(item.product?.name || `Товар #${item.product_id}`)}
                     </Link>
                     {item.product?.vendor && (
                       <p className="text-sm text-gray-500">{item.product.vendor}</p>
@@ -121,13 +125,24 @@ export function CartPage() {
                 <span className="text-lg font-bold">К оплате</span>
                 <span className="text-lg font-bold text-red-700">{total.toFixed(2)} ₽</span>
               </div>
-              <Button
-                onClick={handleOrder}
-                disabled={isPending || loading}
-                className="w-full bg-red-700 hover:bg-red-800"
-              >
-                {isPending ? 'Оформление...' : 'Оформить заказ'}
-              </Button>
+
+              {isAuthenticated ? (
+                <Button
+                  onClick={handleOrder}
+                  disabled={isPending || loading}
+                  className="w-full bg-red-700 hover:bg-red-800"
+                >
+                  {isPending ? 'Оформление...' : 'Оформить заказ'}
+                </Button>
+              ) : (
+                <div className="text-center">
+                  <p className="text-gray-500 text-sm mb-3">Для оформления заказа войдите в аккаунт</p>
+                  <Link to="/login">
+                    <Button className="w-full bg-red-700 hover:bg-red-800">Войти</Button>
+                  </Link>
+                </div>
+              )}
+
               <Link to="/" className="block text-center text-red-700 mt-4 hover:underline">
                 Продолжить покупки
               </Link>

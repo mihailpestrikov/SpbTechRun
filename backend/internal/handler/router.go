@@ -24,21 +24,24 @@ func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Eng
 	productRepo := repository.NewProductRepository(db)
 	userRepo := repository.NewUserRepository(db)
 	cartRepo := repository.NewCartRepository(db)
+	orderRepo := repository.NewOrderRepository(db)
 
 	categoryCache := cache.NewCategoryCache(redisClient)
 	cartCache := cache.NewCartCache(redisClient)
 
 	authService := service.NewAuthService(userRepo, jwtSecret)
 	cartService := service.NewCartService(cartRepo, productRepo, cartCache)
+	orderService := service.NewOrderService(orderRepo, cartRepo, productRepo, cartCache)
 
 	categoryHandler := NewCategoryHandler(categoryRepo, categoryCache)
 	productHandler := NewProductHandler(productRepo)
 	cartHandler := NewCartHandler(cartService)
-	orderHandler := NewOrderHandler()
+	orderHandler := NewOrderHandler(orderService)
 	authHandler := NewAuthHandler(authService, cartService)
 	recommendationHandler := NewRecommendationHandler()
 
 	authMiddleware := middleware.Auth(authService)
+	optionalAuthMiddleware := middleware.OptionalAuth(authService)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -57,11 +60,15 @@ func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Eng
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
 
-		api.GET("/cart", cartHandler.GetCart)
-		api.POST("/cart/items", cartHandler.AddToCart)
-		api.PUT("/cart/items/:id", cartHandler.UpdateCartItem)
-		api.DELETE("/cart/items/:id", cartHandler.DeleteCartItem)
-		api.DELETE("/cart", cartHandler.ClearCart)
+		cart := api.Group("")
+		cart.Use(optionalAuthMiddleware)
+		{
+			cart.GET("/cart", cartHandler.GetCart)
+			cart.POST("/cart/items", cartHandler.AddToCart)
+			cart.PUT("/cart/items/:id", cartHandler.UpdateCartItem)
+			cart.DELETE("/cart/items/:id", cartHandler.DeleteCartItem)
+			cart.DELETE("/cart", cartHandler.ClearCart)
+		}
 
 		protected := api.Group("")
 		protected.Use(authMiddleware)
@@ -69,6 +76,7 @@ func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Eng
 			protected.GET("/auth/profile", authHandler.Profile)
 
 			protected.GET("/orders", orderHandler.GetOrders)
+			protected.GET("/orders/:id", orderHandler.GetOrder)
 			protected.POST("/orders", orderHandler.CreateOrder)
 
 			protected.POST("/recommendations/feedback", recommendationHandler.PostFeedback)

@@ -44,3 +44,28 @@ func GetUserID(c *gin.Context) (int, bool) {
 	id, ok := userID.(int)
 	return id, ok
 }
+
+func OptionalAuth(authService *service.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.Next()
+			return
+		}
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.Next()
+			return
+		}
+
+		userID, err := authService.ValidateToken(parts[1])
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		c.Set(UserIDKey, userID)
+		c.Next()
+	}
+}

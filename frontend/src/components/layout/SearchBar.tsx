@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input } from '@/components/ui/input'
 import { useProductSearch, useCategories } from '@/hooks'
+import { capitalize } from '@/lib/utils'
 
 export function SearchBar() {
   const navigate = useNavigate()
@@ -91,7 +92,7 @@ export function SearchBar() {
                         <div className="w-10 h-10 bg-gray-200 rounded flex-shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-800 truncate">{product.name}</div>
+                        <div className="text-sm text-gray-800 truncate">{capitalize(product.name)}</div>
                         <div className="text-sm font-medium text-red-700">{product.price} ₽</div>
                       </div>
                     </button>

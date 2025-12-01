@@ -6,6 +6,7 @@ import { useProduct, useRecommendations, useFeedback } from '@/hooks'
 import { useCartStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { capitalize } from '@/lib/utils'
 
 export function ProductPage() {
   const { id } = useParams()
@@ -61,7 +62,7 @@ export function ProductPage() {
         <nav className="text-sm text-gray-500 mb-6">
           <Link to="/" className="hover:text-red-700">Каталог</Link>
           <span className="mx-2">/</span>
-          <span>{product.name}</span>
+          <span>{capitalize(product.name)}</span>
         </nav>
 
         <Card className="p-6 mb-8">
@@ -79,7 +80,7 @@ export function ProductPage() {
             )}
 
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-800 mb-2">{product.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-800 mb-2">{capitalize(product.name)}</h1>
               <p className="text-gray-500 mb-4">
                 {product.vendor && `Бренд: ${product.vendor}`}
                 {product.country && ` | Страна: ${product.country}`}
@@ -113,7 +114,7 @@ export function ProductPage() {
                   </button>
                 </div>
                 {!product.available ? (
-                  <Button disabled className="px-8">
+                  <Button disabled className="px-8 h-10">
                     Нет в наличии
                   </Button>
                 ) : isInCart ? (
@@ -121,7 +122,7 @@ export function ProductPage() {
                     onClick={handleAddToCart}
                     disabled={loading}
                     variant="outline"
-                    className="px-8 border-red-700 text-red-700 hover:bg-red-50"
+                    className="px-8 h-10 border-red-700 text-red-700 hover:bg-red-50"
                   >
                     {loading ? 'Добавляем...' : `В корзине (${cartItem.quantity} шт.) — добавить ещё`}
                   </Button>
@@ -129,7 +130,7 @@ export function ProductPage() {
                   <Button
                     onClick={handleAddToCart}
                     disabled={loading}
-                    className="bg-red-700 hover:bg-red-800 px-8"
+                    className="bg-red-700 hover:bg-red-800 px-8 h-10"
                   >
                     {loading ? 'Добавляем...' : 'Добавить в корзину'}
                   </Button>
@@ -183,7 +184,7 @@ export function ProductPage() {
                         Фото
                       </div>
                     )}
-                    <h3 className="font-medium text-gray-800 text-sm line-clamp-2">{rec.product.name}</h3>
+                    <h3 className="font-medium text-gray-800 text-sm line-clamp-2">{capitalize(rec.product.name)}</h3>
                     <p className="text-red-700 font-semibold text-sm mt-1">{rec.product.price} ₽</p>
                   </Link>
                   <p className="text-xs text-gray-500 mt-1">{rec.reason}</p>

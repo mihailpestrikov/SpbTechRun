@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { capitalize } from '@/lib/utils'
 
 export function OrderHistoryPage() {
   const { isAuthenticated } = useAuthStore()
@@ -48,7 +49,7 @@ export function OrderHistoryPage() {
           <div className="space-y-4">
             {orders?.map((order) => (
               <Card key={order.id} className="p-6">
-                <div className="flex justify-between items-start mb-3">
+                <div className="flex justify-between items-start mb-4">
                   <div>
                     <h3 className="font-semibold text-gray-800">Заказ #{order.id}</h3>
                     <p className="text-sm text-gray-500">
@@ -60,15 +61,43 @@ export function OrderHistoryPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-800">{order.total_price} ₽</p>
+                    <p className="font-semibold text-gray-800">{order.total.toFixed(2)} ₽</p>
                     <Badge variant={order.status === 'completed' ? 'default' : 'secondary'} className="mt-1">
                       {order.status === 'completed' ? 'Завершён' : order.status === 'pending' ? 'В обработке' : 'Отменён'}
                     </Badge>
                   </div>
                 </div>
-                <p className="text-sm text-gray-600">
-                  Товары: {order.items.map((i) => i.product.name).join(', ')}
-                </p>
+                <div className="border-t pt-4 space-y-3">
+                  {order.items.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3">
+                      {item.product?.picture ? (
+                        <img
+                          src={item.product.picture}
+                          alt={item.product.name}
+                          className="w-12 h-12 object-contain rounded bg-gray-50"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">
+                          Фото
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <Link
+                          to={`/product/${item.product_id}`}
+                          className="text-sm font-medium text-gray-800 hover:text-red-700 truncate block"
+                        >
+                          {capitalize(item.product?.name || `Товар #${item.product_id}`)}
+                        </Link>
+                        <p className="text-xs text-gray-500">
+                          {item.quantity} шт. × {item.price.toFixed(2)} ₽
+                        </p>
+                      </div>
+                      <p className="text-sm font-medium text-gray-700">
+                        {(item.quantity * item.price).toFixed(2)} ₽
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </Card>
             ))}
           </div>

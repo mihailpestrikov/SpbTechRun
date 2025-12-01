@@ -65,14 +65,17 @@ export interface Order {
   id: number
   created_at: string
   status: 'pending' | 'completed' | 'cancelled'
-  total_price: number
+  total: number
+  address?: string
   items: OrderItem[]
 }
 
 export interface OrderItem {
-  product: Product
+  id: number
+  product_id: number
   quantity: number
   price: number
+  product?: Product
 }
 
 export interface FeedbackRequest {

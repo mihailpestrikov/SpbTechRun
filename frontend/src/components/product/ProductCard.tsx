@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/ui/card'
 import { AddToCartButton } from '@/components/cart'
+import { capitalize } from '@/lib/utils'
 import type { Product } from '@/types'
 
 interface ProductCardProps {
@@ -25,7 +26,7 @@ export function ProductCard({ product }: ProductCardProps) {
             Фото
           </div>
         )}
-        <h3 className="font-medium text-gray-800 line-clamp-2 min-h-[3rem]">{product.name}</h3>
+        <h3 className="font-medium text-gray-800 line-clamp-2 min-h-[3rem]">{capitalize(product.name)}</h3>
         {product.vendor && <p className="text-sm text-gray-500">{product.vendor}</p>}
         <div className="mt-auto pt-2">
           {hasDiscount ? (
