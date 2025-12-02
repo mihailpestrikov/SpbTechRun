@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Input } from '@/components/ui/input'
 import { useCategoryTree, useCategorySearch } from '@/hooks'
 import { CategoryTreeItem } from './CategoryTreeItem'
+import { AiOutlineClose} from 'react-icons/ai'
 
 interface CatalogModalProps {
   isOpen: boolean
@@ -41,15 +42,28 @@ export function CatalogModal({ isOpen, onClose }: CatalogModalProps) {
             </button>
           </div>
 
-          <Input
-            placeholder="Поиск категории..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            autoFocus
-          />
+          
+          <div className="flex items-center w-full  border-[2px] border-red-700 rounded-[15px] p-1">
+            <Input
+              placeholder="Поиск категории..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+              className=" flex-1 border-0 focus:outline-none rounded-[10px]"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className=" text-gray-400 hover:text-gray-700 flex-shrink-0 "
+              >
+                <AiOutlineClose size={20} />
+              </button>
+            )}
+          </div>
+
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 overflow-y-auto p-2 ">
           {isLoading ? (
             <div className="text-center py-8 text-gray-500">Загрузка...</div>
           ) : searchQuery.length >= 2 ? (

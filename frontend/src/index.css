@@ -46,7 +46,7 @@
 body {
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
-  background-color: #fafafa;
+  background-color: #fdfdfd;
   min-height: 100vh;
 }
 
@@ -130,3 +130,4 @@ body {
     @apply bg-background text-foreground;
   }
 }
+

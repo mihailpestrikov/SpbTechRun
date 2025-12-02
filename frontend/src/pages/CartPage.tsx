@@ -37,14 +37,14 @@ export function CartPage() {
   return (
     <PageLayout>
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Корзина</h1>
+        <h1 className="text-3xl font-bold text-black mb-6">Корзина</h1>
 
         <div className="flex gap-8">
           <div className="flex-1">
-            <Card>
+            <Card className="p-0 border-0 shadow-[0_4px_10px_rgba(0,0,0,0.1)] rounded-[20px]">
               {items.map((item) => (
-                <div key={item.product.id} className="flex items-center gap-4 p-4 border-b last:border-b-0">
-                  <div className="w-20 h-20 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">
+                <div key={item.product.id} className="flex items-center  gap-4 p-4 border-b last:border-b-0">
+                  <div className="w-20 h-20 bg-gray-200 rounded-[10px] flex items-center justify-center text-gray-400 text-xs">
                     Фото
                   </div>
                   <div className="flex-1">
@@ -53,27 +53,28 @@ export function CartPage() {
                     </Link>
                     <p className="text-sm text-gray-500">{item.product.brand}</p>
                   </div>
-                  <div className="flex items-center border rounded">
+
+                  <div className="flex items-center  bg-gray-200 rounded-[10px]">
                     <button
                       onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                      className="px-3 py-1 hover:bg-gray-100"
+                      className="px-3 py-1 rounded-[10px] hover:bg-gray-300 font-bold text-lg"
                     >
                       -
                     </button>
-                    <span className="px-3 py-1 border-x">{item.quantity}</span>
+                    <span className="px-3 py-1 ">{item.quantity}</span>
                     <button
                       onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                      className="px-3 py-1 hover:bg-gray-100"
+                      className="px-3 py-1 rounded-[10px] hover:bg-gray-300 text-red-700 font-bold text-lg"
                     >
                       +
                     </button>
                   </div>
-                  <p className="font-semibold text-gray-800 w-24 text-right">
+                  <p className="font-semibold text-gray-800 w-24 text-right text-lg jutify-center text-lg">
                     {item.product.price * item.quantity} ₽
                   </p>
                   <button
                     onClick={() => removeItem(item.product.id)}
-                    className="text-red-600 hover:text-red-800"
+                    className="text-white  bg-red-700 hover:bg-red-800 rounded-[12px] p-2 font-semibold"
                   >
                     Удалить
                   </button>
@@ -83,24 +84,24 @@ export function CartPage() {
           </div>
 
           <div className="w-80">
-            <Card className="p-6 sticky top-4">
+            <Card className="p-6 sticky top-4 border-0 shadow-[0_4px_10px_rgba(0,0,0,0.1)] rounded-[20px]">
               <h2 className="font-semibold text-gray-800 mb-4">Итого</h2>
-              <div className="flex justify-between mb-4 pb-4 border-b">
+              <div className="flex justify-between mb-15 pb-4 border-b">
                 <span className="text-gray-600">Товары ({items.length})</span>
                 <span className="font-medium">{totalPrice()} ₽</span>
               </div>
-              <div className="flex justify-between mb-6">
+              <div className="flex justify-between mb-1">
                 <span className="text-lg font-bold">К оплате</span>
                 <span className="text-lg font-bold text-red-700">{totalPrice()} ₽</span>
               </div>
               <Button
                 onClick={handleOrder}
                 disabled={isPending}
-                className="w-full bg-red-700 hover:bg-red-800"
+                className="w-full bg-red-700 hover:bg-red-800 rounded-[10px] p-5"
               >
                 {isPending ? 'Оформление...' : 'Оформить заказ'}
               </Button>
-              <Link to="/" className="block text-center text-red-700 mt-4 hover:underline">
+              <Link to="/" className="block text-center text-gray-700 mt-4 hover:underline">
                 Продолжить покупки
               </Link>
             </Card>
