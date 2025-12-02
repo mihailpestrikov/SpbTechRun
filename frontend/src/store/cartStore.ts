@@ -6,6 +6,7 @@ interface CartState {
   items: CartItem[]
   total: number
   loading: boolean
+  loadingProductId: number | null
   error: string | null
 
   fetchCart: () => Promise<void>
@@ -14,12 +15,14 @@ interface CartState {
   removeItem: (itemId: number) => Promise<void>
   clear: () => Promise<void>
   totalItems: () => number
+  isProductLoading: (productId: number) => boolean
 }
 
 export const useCartStore = create<CartState>()((set, get) => ({
   items: [],
   total: 0,
   loading: false,
+  loadingProductId: null,
   error: null,
 
   fetchCart: async () => {
@@ -33,17 +36,21 @@ export const useCartStore = create<CartState>()((set, get) => ({
   },
 
   addItem: async (productId, quantity = 1) => {
-    set({ loading: true, error: null })
+    set({ loadingProductId: productId, error: null })
     try {
       await cartApi.addToCart(productId, quantity)
       await get().fetchCart()
     } catch (err) {
-      set({ error: 'Failed to add item', loading: false })
+      set({ error: 'Failed to add item' })
+    } finally {
+      set({ loadingProductId: null })
     }
   },
 
   updateQuantity: async (itemId, quantity) => {
-    set({ loading: true, error: null })
+    const item = get().items.find(i => i.id === itemId)
+    const productId = item?.product_id ?? null
+    set({ loadingProductId: productId, error: null })
     try {
       if (quantity <= 0) {
         await cartApi.removeCartItem(itemId)
@@ -52,17 +59,23 @@ export const useCartStore = create<CartState>()((set, get) => ({
       }
       await get().fetchCart()
     } catch (err) {
-      set({ error: 'Failed to update item', loading: false })
+      set({ error: 'Failed to update item' })
+    } finally {
+      set({ loadingProductId: null })
     }
   },
 
   removeItem: async (itemId) => {
-    set({ loading: true, error: null })
+    const item = get().items.find(i => i.id === itemId)
+    const productId = item?.product_id ?? null
+    set({ loadingProductId: productId, error: null })
     try {
       await cartApi.removeCartItem(itemId)
       await get().fetchCart()
     } catch (err) {
-      set({ error: 'Failed to remove item', loading: false })
+      set({ error: 'Failed to remove item' })
+    } finally {
+      set({ loadingProductId: null })
     }
   },
 
@@ -77,4 +90,6 @@ export const useCartStore = create<CartState>()((set, get) => ({
   },
 
   totalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
+
+  isProductLoading: (productId) => get().loadingProductId === productId,
 }))

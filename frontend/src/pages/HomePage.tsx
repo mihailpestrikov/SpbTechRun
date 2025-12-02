@@ -1,13 +1,11 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, X, SlidersHorizontal, Check, Sparkles } from 'lucide-react'
 import { PageLayout } from '@/components/layout'
 import { ProductGrid } from '@/components/product'
 import { CategoryTree, buildCountsMap } from '@/components/filters'
 import { useSearch, useCategories } from '@/hooks'
 import { useCartStore } from '@/store'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import type { SearchFilter } from '@/types'
 
 const ITEMS_PER_PAGE = 21
@@ -27,6 +25,7 @@ function useDebounce<T>(value: T, delay: number): T {
 export function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const searchQuery = searchParams.get('q') || ''
+  const categoryParam = searchParams.get('category')
 
   const [selectedCategories, setSelectedCategories] = useState<number[]>([])
   const [minPrice, setMinPrice] = useState('')
@@ -47,13 +46,54 @@ export function HomePage() {
     fetchCart()
   }, [fetchCart])
 
+  const skipNextReset = useRef(false)
+
+  const getCategoryPath = (categoryId: number): number[] => {
+    if (!categories) return [categoryId]
+    const path: number[] = []
+    let currentId: number | null = categoryId
+    while (currentId !== null) {
+      path.unshift(currentId)
+      const cat = categories.find(c => c.id === currentId)
+      if (!cat) break
+      currentId = cat.parent_id ?? null
+    }
+    return path
+  }
+
   useEffect(() => {
-    setPage(1)
-    setSelectedCategories([])
-    setSelectedVendors([])
-    setAvailable(undefined)
-    setMinPrice('')
-    setMaxPrice('')
+    if (categoryParam && categories) {
+      const categoryId = parseInt(categoryParam, 10)
+      if (!isNaN(categoryId)) {
+        skipNextReset.current = true
+        setPage(1)
+        setSelectedCategories(getCategoryPath(categoryId))
+        setSelectedVendors([])
+        setAvailable(undefined)
+        setMinPrice('')
+        setMaxPrice('')
+        const newParams = new URLSearchParams(searchParams)
+        newParams.delete('category')
+        setSearchParams(newParams, { replace: true })
+      }
+    }
+  }, [categoryParam, categories])
+
+  const prevSearchQuery = useRef(searchQuery)
+  useEffect(() => {
+    if (prevSearchQuery.current !== searchQuery) {
+      prevSearchQuery.current = searchQuery
+      if (skipNextReset.current) {
+        skipNextReset.current = false
+        return
+      }
+      setPage(1)
+      setSelectedCategories([])
+      setSelectedVendors([])
+      setAvailable(undefined)
+      setMinPrice('')
+      setMaxPrice('')
+    }
   }, [searchQuery])
 
   useEffect(() => {
@@ -91,13 +131,13 @@ export function HomePage() {
   const allVendors = initialSearchData?.aggregations?.vendors
   const vendorCounts = useMemo(() => {
     const map = new Map<string, number>()
-    if (aggregations?.vendors) {
-      for (const v of aggregations.vendors) {
+    if (allVendors) {
+      for (const v of allVendors) {
         map.set(v.name, v.count)
       }
     }
     return map
-  }, [aggregations?.vendors])
+  }, [allVendors])
 
   const handleClearSearch = () => {
     const newParams = new URLSearchParams(searchParams)
@@ -106,6 +146,7 @@ export function HomePage() {
   }
 
   const hasActiveFilters = selectedCategories.length > 0 || selectedVendors.length > 0 || debouncedMinPrice || debouncedMaxPrice || available
+  const activeFiltersCount = selectedCategories.length + selectedVendors.length + (debouncedMinPrice ? 1 : 0) + (debouncedMaxPrice ? 1 : 0) + (available ? 1 : 0)
 
   const handleResetFilters = () => {
     setSelectedCategories([])
@@ -119,126 +160,193 @@ export function HomePage() {
     <PageLayout>
       <div className="max-w-7xl mx-auto px-4 py-8">
         {searchQuery ? (
-          <div className="mb-6">
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-              <button onClick={handleClearSearch} className="hover:text-red-700">
+          <div className="mb-8 animate-fade-in">
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+              <button onClick={handleClearSearch} className="hover:text-red-600 transition-colors">
                 Все товары
               </button>
-              <span>/</span>
-              <span className="text-gray-800">Поиск: "{searchQuery}"</span>
+              <ChevronRight className="w-4 h-4" />
+              <span className="text-gray-800 font-medium">Поиск: "{searchQuery}"</span>
             </div>
-            <h1 className="text-3xl font-bold text-gray-800">
+            <h1 className="text-3xl font-bold text-gray-900">
               Результаты поиска
-              {total !== undefined && <span className="text-lg font-normal text-gray-500 ml-2">({total})</span>}
+              {total !== undefined && (
+                <span className="text-lg font-normal text-gray-400 ml-3">
+                  {total.toLocaleString()} товаров
+                </span>
+              )}
             </h1>
           </div>
         ) : (
-          <h1 className="text-3xl font-bold text-gray-800 mb-6">
-            Каталог товаров
-            {total !== undefined && <span className="text-lg font-normal text-gray-500 ml-2">({total})</span>}
-          </h1>
+          <div className="mb-8 animate-fade-in">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Каталог товаров
+              {total !== undefined && (
+                <span className="text-lg font-normal text-gray-400 ml-3">
+                  {total.toLocaleString()} товаров
+                </span>
+              )}
+            </h1>
+          </div>
         )}
 
         <div className="flex gap-8">
-          <aside className="w-64 shrink-0">
-            <Card className="p-4 space-y-6">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleResetFilters}
-                disabled={!hasActiveFilters}
-                className="w-full"
-              >
-                Сбросить фильтры
-              </Button>
-
-              {categories && categories.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-3">Категории</h3>
-                  <CategoryTree
-                    categories={categories}
-                    counts={categoryCounts}
-                    selected={selectedCategories}
-                    onChange={setSelectedCategories}
-                  />
+          <aside className="w-72 shrink-0">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-20">
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-gray-500" />
+                  <span className="font-semibold text-gray-800">Фильтры</span>
+                  {activeFiltersCount > 0 && (
+                    <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">
+                      {activeFiltersCount}
+                    </span>
+                  )}
                 </div>
-              )}
-
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-3">Цена, ₽</h3>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder={aggregations?.price_range ? `от ${Math.floor(aggregations.price_range.min)}` : 'От'}
-                    value={minPrice}
-                    onChange={(e) => setMinPrice(e.target.value)}
-                    className="w-full"
-                  />
-                  <Input
-                    type="number"
-                    placeholder={aggregations?.price_range ? `до ${Math.ceil(aggregations.price_range.max)}` : 'До'}
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value)}
-                    className="w-full"
-                  />
-                </div>
+                <button
+                  onClick={handleResetFilters}
+                  disabled={!hasActiveFilters}
+                  className="text-sm text-gray-500 hover:text-red-600 disabled:opacity-40 disabled:hover:text-gray-500 transition-colors flex items-center gap-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Сбросить
+                </button>
               </div>
 
-              {allVendors && allVendors.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-3">Производитель</h3>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {allVendors.map((v) => (
-                      <label key={v.name} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedVendors.includes(v.name)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedVendors([...selectedVendors, v.name])
-                            } else {
-                              setSelectedVendors(selectedVendors.filter(x => x !== v.name))
-                            }
-                          }}
-                          className="rounded border-gray-300"
-                        />
-                        <span className="text-sm flex-1 truncate">{v.name}</span>
-                        <span className="text-xs text-gray-500">({vendorCounts.get(v.name) ?? 0})</span>
-                      </label>
-                    ))}
+              <div className="p-4 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto scrollbar-thin">
+                {categories && categories.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                      Категории
+                    </h3>
+                    <CategoryTree
+                      categories={categories}
+                      counts={categoryCounts}
+                      selected={selectedCategories}
+                      onChange={setSelectedCategories}
+                    />
+                  </div>
+                )}
+
+                <div className="border-t border-gray-100 pt-6">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                    Цена, ₽
+                  </h3>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="От"
+                      value={minPrice}
+                      onChange={(e) => setMinPrice(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:border-red-300 focus:ring-2 focus:ring-red-100 transition-all"
+                    />
+                    <input
+                      type="number"
+                      placeholder="До"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:border-red-300 focus:ring-2 focus:ring-red-100 transition-all"
+                    />
                   </div>
                 </div>
-              )}
 
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={available === true}
-                    onChange={(e) => setAvailable(e.target.checked ? true : undefined)}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm">Только в наличии</span>
-                </label>
+                {allVendors && allVendors.length > 0 && (
+                  <div className="border-t border-gray-100 pt-6">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                      Производитель
+                    </h3>
+                    <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-thin">
+                      {allVendors.map((v) => {
+                        const isChecked = selectedVendors.includes(v.name)
+                        const count = vendorCounts.get(v.name) ?? 0
+                        return (
+                          <label
+                            key={v.name}
+                            className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg transition-colors ${
+                              isChecked ? 'bg-red-50' : 'hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                              isChecked
+                                ? 'bg-red-500 border-red-500'
+                                : 'border-gray-300 hover:border-gray-400'
+                            }`}>
+                              {isChecked && <Check className="w-3 h-3 text-white" />}
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedVendors([...selectedVendors, v.name])
+                                } else {
+                                  setSelectedVendors(selectedVendors.filter(x => x !== v.name))
+                                }
+                              }}
+                              className="sr-only"
+                            />
+                            <span className={`text-sm flex-1 truncate ${isChecked ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
+                              {v.name}
+                            </span>
+                            <span className={`text-xs ${isChecked ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
+                              {count}
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="border-t border-gray-100 pt-6">
+                  <label
+                    className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg transition-colors ${
+                      available ? 'bg-green-50' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                      available
+                        ? 'bg-green-500 border-green-500'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}>
+                      {available && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={available === true}
+                      onChange={(e) => setAvailable(e.target.checked ? true : undefined)}
+                      className="sr-only"
+                    />
+                    <span className={`text-sm ${available ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
+                      Только в наличии
+                    </span>
+                  </label>
+                </div>
               </div>
-            </Card>
+            </div>
           </aside>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {!searchQuery && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                <h2 className="font-semibold text-red-800 mb-2">Рекомендуем вам</h2>
-                <p className="text-gray-600 text-sm">Здесь будет карусель рекомендаций</p>
+              <div className="bg-gradient-to-r from-red-50 to-rose-50 rounded-2xl p-6 mb-8 border border-red-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-5 h-5 text-red-500" />
+                  <h2 className="font-semibold text-gray-900">Рекомендуем вам</h2>
+                </div>
+                <p className="text-gray-600 text-sm">Персональные рекомендации появятся здесь</p>
               </div>
             )}
 
             <ProductGrid products={products || []} isLoading={isLoading} />
 
             {total !== undefined && total > 0 && (
-              <div className="mt-6">
-                <p className="text-gray-500 text-sm mb-4">
-                  Показано {Math.min(page * ITEMS_PER_PAGE, total)} из {total} товаров
-                </p>
+              <div className="mt-8 animate-fade-in">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-gray-500 text-sm">
+                    Показано <span className="font-medium text-gray-700">{Math.min(page * ITEMS_PER_PAGE, total)}</span> из{' '}
+                    <span className="font-medium text-gray-700">{total.toLocaleString()}</span> товаров
+                  </p>
+                </div>
 
                 {total > ITEMS_PER_PAGE && (
                   <Pagination
@@ -292,40 +400,40 @@ function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) 
   }
 
   return (
-    <div className="flex items-center justify-center gap-1">
-      <Button
-        variant="outline"
-        size="sm"
+    <div className="flex items-center justify-center gap-1.5">
+      <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
+        className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:border-gray-200 transition-all"
       >
-        ←
-      </Button>
+        <ChevronLeft className="w-5 h-5" />
+      </button>
 
       {getPageNumbers().map((p, idx) =>
         p === 'ellipsis' ? (
-          <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+          <span key={`ellipsis-${idx}`} className="w-10 text-center text-gray-400">...</span>
         ) : (
-          <Button
+          <button
             key={p}
-            variant={p === currentPage ? 'default' : 'outline'}
-            size="sm"
             onClick={() => onPageChange(p)}
-            className={p === currentPage ? 'bg-red-700 hover:bg-red-800' : ''}
+            className={`w-10 h-10 rounded-xl font-medium text-sm transition-all ${
+              p === currentPage
+                ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-md'
+                : 'border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+            }`}
           >
             {p}
-          </Button>
+          </button>
         )
       )}
 
-      <Button
-        variant="outline"
-        size="sm"
+      <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
+        className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:border-gray-200 transition-all"
       >
-        →
-      </Button>
+        <ChevronRight className="w-5 h-5" />
+      </button>
     </div>
   )
 }

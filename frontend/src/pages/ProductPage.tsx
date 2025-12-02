@@ -1,12 +1,36 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import DOMPurify from 'dompurify'
+import { ChevronRight, Minus, Plus, ShoppingCart, Check, ThumbsUp, ThumbsDown, Package, Sparkles } from 'lucide-react'
 import { PageLayout } from '@/components/layout'
-import { useProduct, useRecommendations, useFeedback } from '@/hooks'
+import { useProduct, useRecommendations, useFeedback, useCategories } from '@/hooks'
 import { useCartStore } from '@/store'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { capitalize } from '@/lib/utils'
+import type { Category } from '@/types'
+
+function ProductSkeleton() {
+  return (
+    <div className="animate-pulse">
+      <div className="h-4 w-48 bg-gray-200 rounded mb-8" />
+      <div className="bg-white rounded-2xl border border-gray-100 p-8">
+        <div className="flex gap-10">
+          <div className="w-[450px] h-[450px] bg-gray-100 rounded-2xl flex-shrink-0" />
+          <div className="flex-1 space-y-4">
+            <div className="h-8 bg-gray-100 rounded-lg w-3/4" />
+            <div className="h-4 bg-gray-100 rounded w-1/3" />
+            <div className="h-10 bg-gray-100 rounded-lg w-1/4 mt-6" />
+            <div className="h-12 bg-gray-100 rounded-xl w-1/2 mt-6" />
+            <div className="space-y-2 mt-8">
+              <div className="h-4 bg-gray-100 rounded w-full" />
+              <div className="h-4 bg-gray-100 rounded w-5/6" />
+              <div className="h-4 bg-gray-100 rounded w-4/6" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function ProductPage() {
   const { id } = useParams()
@@ -15,12 +39,27 @@ export function ProductPage() {
 
   const { data: product, isLoading } = useProduct(productId)
   const { data: recommendations } = useRecommendations(productId)
+  const { data: categories } = useCategories()
   const { mutate: sendFeedback } = useFeedback()
-  const { items, addItem, loading, fetchCart } = useCartStore()
+  const { items, addItem, fetchCart, isProductLoading } = useCartStore()
+  const loading = isProductLoading(productId)
 
   useEffect(() => {
     fetchCart()
   }, [fetchCart])
+
+  const categoryPath = useMemo(() => {
+    if (!product || !categories) return []
+    const path: Category[] = []
+    let currentId: number | null = product.category_id
+    while (currentId !== null) {
+      const cat = categories.find(c => c.id === currentId)
+      if (!cat) break
+      path.unshift(cat)
+      currentId = cat.parent_id ?? null
+    }
+    return path
+  }, [product, categories])
 
   const cartItem = items.find((item) => item.product_id === productId)
   const isInCart = !!cartItem
@@ -40,7 +79,9 @@ export function ProductPage() {
   if (isLoading) {
     return (
       <PageLayout>
-        <div className="max-w-7xl mx-auto px-4 py-8 text-center text-gray-500">Загрузка...</div>
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <ProductSkeleton />
+        </div>
       </PageLayout>
     )
   }
@@ -48,113 +89,157 @@ export function ProductPage() {
   if (!product) {
     return (
       <PageLayout>
-        <div className="max-w-7xl mx-auto px-4 py-8 text-center text-gray-500">Товар не найден</div>
+        <div className="max-w-7xl mx-auto px-4 py-16 text-center">
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Package className="w-10 h-10 text-gray-300" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Товар не найден</h2>
+          <p className="text-gray-500 mb-6">Возможно, он был удалён или перемещён</p>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-rose-500 text-white font-medium rounded-xl hover:from-red-600 hover:to-rose-600 transition-all shadow-md hover:shadow-lg"
+          >
+            Перейти в каталог
+          </Link>
+        </div>
       </PageLayout>
     )
   }
 
   const displayPrice = product.discount_price || product.price
   const hasDiscount = product.discount_price && product.discount_price < product.price
+  const discountPercent = hasDiscount
+    ? Math.round((1 - product.discount_price! / product.price) * 100)
+    : 0
 
   return (
     <PageLayout>
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <nav className="text-sm text-gray-500 mb-6">
-          <Link to="/" className="hover:text-red-700">Каталог</Link>
-          <span className="mx-2">/</span>
-          <span>{capitalize(product.name)}</span>
+        <nav className="flex items-center gap-2 text-sm text-gray-500 mb-8 animate-fade-in flex-wrap">
+          <Link to="/" className="hover:text-red-600 transition-colors">Каталог</Link>
+          {categoryPath.map((cat) => (
+            <span key={cat.id} className="flex items-center gap-2">
+              <ChevronRight className="w-4 h-4" />
+              <Link to={`/?category=${cat.id}`} className="hover:text-red-600 transition-colors">{cat.name}</Link>
+            </span>
+          ))}
+          <ChevronRight className="w-4 h-4" />
+          <span className="text-gray-800 font-medium truncate max-w-md">{capitalize(product.name)}</span>
         </nav>
 
-        <Card className="p-6 mb-8">
-          <div className="flex gap-8">
-            {product.picture ? (
-              <img
-                src={product.picture}
-                alt={product.name}
-                className="w-96 h-96 object-contain rounded-lg shrink-0"
-              />
-            ) : (
-              <div className="w-96 h-96 bg-gray-200 rounded-lg flex items-center justify-center text-gray-400 shrink-0">
-                Фото товара
-              </div>
-            )}
-
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-800 mb-2">{capitalize(product.name)}</h1>
-              <p className="text-gray-500 mb-4">
-                {product.vendor && `Бренд: ${product.vendor}`}
-                {product.country && ` | Страна: ${product.country}`}
-              </p>
-
-              <div className="mb-6">
-                {hasDiscount ? (
-                  <>
-                    <p className="text-gray-400 line-through">{product.price} ₽</p>
-                    <p className="text-3xl font-bold text-red-700">{displayPrice} ₽</p>
-                  </>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-8 animate-slide-up">
+          <div className="flex flex-col lg:flex-row">
+            <div className="lg:w-[500px] p-8 flex-shrink-0 bg-gray-50/50">
+              <div className="relative aspect-square rounded-2xl overflow-hidden bg-white">
+                {hasDiscount && (
+                  <div className="absolute top-4 left-4 z-10 bg-gradient-to-r from-red-500 to-rose-500 text-white text-sm font-bold px-3 py-1.5 rounded-lg shadow-md">
+                    -{discountPercent}%
+                  </div>
+                )}
+                {product.picture ? (
+                  <img
+                    src={product.picture}
+                    alt={product.name}
+                    className="w-full h-full object-contain p-4"
+                  />
                 ) : (
-                  <p className="text-3xl font-bold text-red-700">{displayPrice} ₽</p>
+                  <div className="w-full h-full flex items-center justify-center text-gray-300">
+                    <Package className="w-24 h-24" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 p-8 lg:p-10">
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-3">{capitalize(product.name)}</h1>
+
+              <div className="flex items-center gap-3 text-sm text-gray-500 mb-6">
+                {product.vendor && (
+                  <span className="px-3 py-1 bg-gray-100 rounded-full">{product.vendor}</span>
+                )}
+                {product.country && (
+                  <span className="px-3 py-1 bg-gray-100 rounded-full">{product.country}</span>
+                )}
+                {product.available ? (
+                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full flex items-center gap-1">
+                    <Check className="w-3 h-3" /> В наличии
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 bg-gray-100 text-gray-500 rounded-full">Нет в наличии</span>
                 )}
               </div>
 
-              <div className="flex items-center gap-4 mb-6">
-                <div className="flex items-center border rounded">
+              <div className="mb-8">
+                {hasDiscount ? (
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-4xl font-bold text-gray-900">{displayPrice.toLocaleString()} ₽</span>
+                    <span className="text-xl text-gray-400 line-through">{product.price.toLocaleString()} ₽</span>
+                  </div>
+                ) : (
+                  <span className="text-4xl font-bold text-gray-900">{displayPrice.toLocaleString()} ₽</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-4 mb-8">
+                <div className="flex items-center h-12 bg-gray-100 rounded-xl overflow-hidden">
                   <button
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    className="px-3 py-2 hover:bg-gray-100"
+                    className="w-12 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors"
                   >
-                    -
+                    <Minus className="w-4 h-4" />
                   </button>
-                  <span className="px-4 py-2 border-x">{quantity}</span>
+                  <span className="w-12 text-center font-semibold text-gray-800">{quantity}</span>
                   <button
                     onClick={() => setQuantity((q) => q + 1)}
-                    className="px-3 py-2 hover:bg-gray-100"
+                    className="w-12 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors"
                   >
-                    +
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
+
                 {!product.available ? (
-                  <Button disabled className="px-8 h-10">
+                  <button disabled className="h-12 px-8 bg-gray-200 text-gray-500 font-medium rounded-xl cursor-not-allowed">
                     Нет в наличии
-                  </Button>
+                  </button>
                 ) : isInCart ? (
-                  <Button
+                  <button
                     onClick={handleAddToCart}
                     disabled={loading}
-                    variant="outline"
-                    className="px-8 h-10 border-red-700 text-red-700 hover:bg-red-50"
+                    className="h-12 px-8 bg-gray-100 text-gray-800 font-medium rounded-xl hover:bg-gray-200 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
-                    {loading ? 'Добавляем...' : `В корзине (${cartItem.quantity} шт.) — добавить ещё`}
-                  </Button>
+                    <Check className="w-5 h-5 text-green-500" />
+                    {loading ? 'Добавляем...' : `В корзине (${cartItem.quantity}) — ещё`}
+                  </button>
                 ) : (
-                  <Button
+                  <button
                     onClick={handleAddToCart}
                     disabled={loading}
-                    className="bg-red-700 hover:bg-red-800 px-8 h-10"
+                    className="h-12 px-8 bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white font-medium rounded-xl transition-all shadow-md hover:shadow-lg flex items-center gap-2 disabled:opacity-50"
                   >
-                    {loading ? 'Добавляем...' : 'Добавить в корзину'}
-                  </Button>
+                    <ShoppingCart className="w-5 h-5" />
+                    {loading ? 'Добавляем...' : 'В корзину'}
+                  </button>
                 )}
               </div>
 
               {product.description && (
-                <div>
-                  <h2 className="font-semibold text-gray-700 mb-2">Описание</h2>
-                  <p
-                    className="text-gray-600"
+                <div className="border-t border-gray-100 pt-6">
+                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Описание</h2>
+                  <div
+                    className="text-gray-600 leading-relaxed prose prose-sm max-w-none"
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(product.description) }}
                   />
                 </div>
               )}
 
               {product.params && Object.keys(product.params).length > 0 && (
-                <div className="mt-4">
-                  <h2 className="font-semibold text-gray-700 mb-2">Характеристики</h2>
-                  <dl className="grid grid-cols-2 gap-2 text-sm">
+                <div className="border-t border-gray-100 pt-6 mt-6">
+                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Характеристики</h2>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {Object.entries(product.params).map(([key, value]) => (
-                      <div key={key} className="flex">
-                        <dt className="text-gray-500 w-1/2">{key}:</dt>
-                        <dd className="text-gray-800">{value}</dd>
+                      <div key={key} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
+                        <dt className="text-sm text-gray-500 flex-shrink-0">{key}:</dt>
+                        <dd className="text-sm font-medium text-gray-800">{value}</dd>
                       </div>
                     ))}
                   </dl>
@@ -162,61 +247,68 @@ export function ProductPage() {
               )}
             </div>
           </div>
-        </Card>
+        </div>
 
         {recommendations && recommendations.length > 0 && (
-          <Card className="p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">Сопутствующие товары</h2>
-            <p className="text-gray-500 text-sm mb-4">Помогите улучшить рекомендации — оцените подборку</p>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 lg:p-8 animate-slide-up">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-5 h-5 text-red-500" />
+              <h2 className="text-xl font-bold text-gray-900">Сопутствующие товары</h2>
+            </div>
+            <p className="text-gray-500 text-sm mb-6">Помогите улучшить рекомендации — оцените подборку</p>
 
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {recommendations.map((rec) => (
-                <div key={rec.product.id} className="border rounded-lg p-4">
+                <div key={rec.product.id} className="group bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-100">
                   <Link to={`/product/${rec.product.id}`}>
-                    {rec.product.picture ? (
-                      <img
-                        src={rec.product.picture}
-                        alt={rec.product.name}
-                        className="h-32 w-full object-contain rounded mb-3"
-                      />
-                    ) : (
-                      <div className="bg-gray-200 h-32 rounded mb-3 flex items-center justify-center text-gray-400">
-                        Фото
-                      </div>
-                    )}
-                    <h3 className="font-medium text-gray-800 text-sm line-clamp-2">{capitalize(rec.product.name)}</h3>
-                    <p className="text-red-700 font-semibold text-sm mt-1">{rec.product.price} ₽</p>
+                    <div className="aspect-square rounded-lg overflow-hidden bg-white mb-3">
+                      {rec.product.picture ? (
+                        <img
+                          src={rec.product.picture}
+                          alt={rec.product.name}
+                          className="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-300">
+                          <Package className="w-10 h-10" />
+                        </div>
+                      )}
+                    </div>
+                    <h3 className="font-medium text-gray-800 text-sm line-clamp-2 min-h-[2.5rem] group-hover:text-red-600 transition-colors">
+                      {capitalize(rec.product.name)}
+                    </h3>
+                    <p className="text-red-600 font-bold mt-1">{rec.product.price.toLocaleString()} ₽</p>
                   </Link>
-                  <p className="text-xs text-gray-500 mt-1">{rec.reason}</p>
+                  <p className="text-xs text-gray-400 mt-1 line-clamp-1">{rec.reason}</p>
 
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={() => handleFeedback(rec.product.id, 'positive')}
                       disabled={!!feedbackGiven[rec.product.id]}
-                      className={`flex-1 py-1 border rounded text-sm transition-colors ${
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 ${
                         feedbackGiven[rec.product.id] === 'positive'
-                          ? 'bg-green-100 border-green-500 text-green-700'
-                          : 'border-green-500 text-green-600 hover:bg-green-50'
-                      } disabled:opacity-50`}
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-white border border-gray-200 text-gray-600 hover:border-green-300 hover:text-green-600'
+                      } disabled:opacity-60`}
                     >
-                      👍
+                      <ThumbsUp className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleFeedback(rec.product.id, 'negative')}
                       disabled={!!feedbackGiven[rec.product.id]}
-                      className={`flex-1 py-1 border rounded text-sm transition-colors ${
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 ${
                         feedbackGiven[rec.product.id] === 'negative'
-                          ? 'bg-red-100 border-red-500 text-red-700'
-                          : 'border-red-500 text-red-600 hover:bg-red-50'
-                      } disabled:opacity-50`}
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-white border border-gray-200 text-gray-600 hover:border-red-300 hover:text-red-600'
+                      } disabled:opacity-60`}
                     >
-                      👎
+                      <ThumbsDown className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-          </Card>
+          </div>
         )}
       </div>
     </PageLayout>

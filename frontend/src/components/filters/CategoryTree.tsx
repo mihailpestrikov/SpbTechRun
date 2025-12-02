@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { ChevronRight, Check } from 'lucide-react'
 import type { Category, CategoryAgg } from '@/types'
 
 interface CategoryTreeProps {
@@ -17,6 +18,37 @@ interface TreeNode {
 
 export function CategoryTree({ categories, counts, selected, onChange }: CategoryTreeProps) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
+
+  const getAncestorIds = (categoryId: number): number[] => {
+    const ancestors: number[] = []
+    const cat = categories.find(c => c.id === categoryId)
+    if (!cat) return ancestors
+
+    let parentId = cat.parent_id
+    while (parentId !== null && parentId !== undefined) {
+      ancestors.push(parentId)
+      const parentCat = categories.find(c => c.id === parentId)
+      if (!parentCat) break
+      parentId = parentCat.parent_id
+    }
+    return ancestors
+  }
+
+  useEffect(() => {
+    if (selected.length > 0) {
+      const allAncestors = new Set<number>()
+      for (const id of selected) {
+        for (const ancestorId of getAncestorIds(id)) {
+          allAncestors.add(ancestorId)
+        }
+      }
+      if (allAncestors.size > 0) {
+        setExpanded(prev => new Set([...prev, ...allAncestors]))
+      }
+    } else {
+      setExpanded(new Set())
+    }
+  }, [selected, categories])
 
   const tree = useMemo(() => {
     const map = new Map<number, TreeNode>()
@@ -90,22 +122,42 @@ export function CategoryTree({ categories, counts, selected, onChange }: Categor
     const count = counts.get(node.id)
 
     return (
-      <div key={node.id}>
+      <div key={node.id} className="animate-fade-in">
         <label
-          className="flex items-center gap-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer"
-          style={{ paddingLeft: `${level * 16 + 8}px` }}
+          className={`flex items-center gap-2 py-2 px-2 rounded-lg cursor-pointer transition-all duration-200 group ${
+            isSelected ? 'bg-red-50' : 'hover:bg-gray-50'
+          }`}
+          style={{ paddingLeft: `${level * 12 + 8}px` }}
         >
+          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+            isSelected
+              ? 'bg-red-500 border-red-500'
+              : 'border-gray-300 group-hover:border-gray-400'
+          }`}>
+            {isSelected && <Check className="w-3 h-3 text-white" />}
+          </div>
           <input
             type="checkbox"
             checked={isSelected}
             onChange={() => toggleSelect(node.id, hasChildren)}
-            className="rounded border-gray-300"
+            className="sr-only"
           />
-          <span className="text-sm flex-1 truncate">{node.name}</span>
-          <span className="text-xs text-gray-500 pr-2">({count ?? 0})</span>
+          {hasChildren && (
+            <ChevronRight
+              className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${
+                isExpanded ? 'rotate-90' : ''
+              }`}
+            />
+          )}
+          <span className={`text-sm flex-1 truncate ${isSelected ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
+            {node.name}
+          </span>
+          <span className={`text-xs flex-shrink-0 ${isSelected ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
+            {count ?? 0}
+          </span>
         </label>
         {hasChildren && isExpanded && (
-          <div>
+          <div className="overflow-hidden animate-slide-down">
             {node.children.map((child) => renderNode(child, level + 1))}
           </div>
         )}
@@ -116,7 +168,7 @@ export function CategoryTree({ categories, counts, selected, onChange }: Categor
   if (tree.length === 0) return null
 
   return (
-    <div className="space-y-0.5 max-h-64 overflow-y-auto">
+    <div className="space-y-0.5 max-h-64 overflow-y-auto scrollbar-thin -mx-2">
       {tree.map((node) => renderNode(node, 0))}
     </div>
   )
