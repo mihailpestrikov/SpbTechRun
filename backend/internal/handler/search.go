@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -22,9 +23,11 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		Text: c.Query("q"),
 	}
 
-	if categoryID := c.Query("category_id"); categoryID != "" {
-		if id, err := strconv.Atoi(categoryID); err == nil {
-			q.CategoryID = &id
+	if categoryIDs := c.Query("category_ids"); categoryIDs != "" {
+		for _, idStr := range strings.Split(categoryIDs, ",") {
+			if id, err := strconv.Atoi(strings.TrimSpace(idStr)); err == nil {
+				q.CategoryIDs = append(q.CategoryIDs, id)
+			}
 		}
 	}
 
@@ -40,8 +43,12 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		}
 	}
 
-	if vendor := c.Query("vendor"); vendor != "" {
-		q.Vendor = &vendor
+	if vendors := c.Query("vendors"); vendors != "" {
+		for _, v := range strings.Split(vendors, ",") {
+			if trimmed := strings.TrimSpace(v); trimmed != "" {
+				q.Vendors = append(q.Vendors, trimmed)
+			}
+		}
 	}
 
 	if available := c.Query("available"); available != "" {

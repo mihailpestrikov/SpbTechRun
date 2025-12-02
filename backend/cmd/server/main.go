@@ -52,20 +52,23 @@ func main() {
 	outboxRepo := repository.NewOutboxRepository(db)
 	productRepo := repository.NewProductRepository(db, outboxRepo)
 
-	searchComponents := search.Setup(context.Background(), cfg.Elastic.URL, categoryRepo, outboxRepo, productRepo)
-	var searchRepo *search.Repository
-	if searchComponents != nil {
-		searchRepo = searchComponents.Repository
+	searchComponents, err := search.Setup(context.Background(), cfg.Elastic.URL, categoryRepo, outboxRepo, productRepo)
+	if err != nil {
+		log.Error("failed to setup elasticsearch", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	routerDeps := handler.RouterDeps{
+		DB:           db,
+		JWTSecret:    cfg.JWT.Secret,
+		RedisClient:  redisClient,
+		ProductRepo:  productRepo,
+		SearchRepo:   searchComponents.Repository,
+		SearchClient: searchComponents.Client,
 	}
 
 	gin.SetMode(gin.ReleaseMode)
-	router := handler.NewRouter(handler.RouterDeps{
-		DB:          db,
-		JWTSecret:   cfg.JWT.Secret,
-		RedisClient: redisClient,
-		SearchRepo:  searchRepo,
-		ProductRepo: productRepo,
-	})
+	router := handler.NewRouter(routerDeps)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),
@@ -81,10 +84,8 @@ func main() {
 
 		log.Info("shutting down...")
 
-		if searchComponents != nil {
-			searchComponents.Stop()
-			log.Info("search worker stopped")
-		}
+		searchComponents.Stop()
+		log.Info("search worker stopped")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

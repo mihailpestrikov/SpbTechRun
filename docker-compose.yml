@@ -9,11 +9,21 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U postgres
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: redis-cli ping
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   elasticsearch:
     image: elasticsearch:8.11.0
@@ -27,9 +37,9 @@ services:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
       test: curl -s http://localhost:9200 >/dev/null || exit 1
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
   frontend:
     build: ./frontend
@@ -47,9 +57,12 @@ services:
       - REDIS_HOST=redis
       - ELASTIC_URL=http://elasticsearch:9200
     depends_on:
-      - postgres
-      - redis
-      - elasticsearch
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
 
 volumes:
   postgres_data:

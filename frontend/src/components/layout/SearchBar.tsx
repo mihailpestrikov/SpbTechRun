@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input } from '@/components/ui/input'
-import { useProductSearch, useCategories } from '@/hooks'
+import { useSearch, useCategories } from '@/hooks'
 import { capitalize } from '@/lib/utils'
+import type { Product } from '@/types'
 
 export function SearchBar() {
   const navigate = useNavigate()
@@ -10,7 +11,8 @@ export function SearchBar() {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const { data: products } = useProductSearch(query)
+  const { data: searchData } = useSearch({ q: query.length >= 2 ? query : undefined, limit: 5 })
+  const products = searchData?.products
   const { data: allCategories } = useCategories()
 
   const categories = useMemo(() => {
@@ -30,6 +32,19 @@ export function SearchBar() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  const handleSearch = () => {
+    if (query.trim()) {
+      navigate(`/?q=${encodeURIComponent(query.trim())}`)
+      setIsOpen(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }
 
   const handleProductClick = (productId: number) => {
     navigate(`/product/${productId}`)
@@ -53,6 +68,7 @@ export function SearchBar() {
           setIsOpen(true)
         }}
         onFocus={() => setIsOpen(true)}
+        onKeyDown={handleKeyDown}
         className="bg-white/90 border-0 focus-visible:ring-2 focus-visible:ring-white"
       />
 
@@ -80,7 +96,7 @@ export function SearchBar() {
               {products && products.length > 0 && (
                 <div className="p-2">
                   <div className="text-xs font-medium text-gray-400 px-2 mb-1">Товары</div>
-                  {products.slice(0, 5).map((product) => (
+                  {products.slice(0, 5).map((product: Product) => (
                     <button
                       key={product.id}
                       onClick={() => handleProductClick(product.id)}
@@ -99,6 +115,13 @@ export function SearchBar() {
                   ))}
                 </div>
               )}
+
+              <button
+                onClick={handleSearch}
+                className="w-full p-3 text-center text-sm text-red-700 hover:bg-red-50 border-t font-medium"
+              >
+                Показать все результаты
+              </button>
             </>
           )}
         </div>

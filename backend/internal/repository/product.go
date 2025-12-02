@@ -134,9 +134,9 @@ func (r *ProductRepository) GetByCategory(ctx context.Context, categoryID int, l
 func (r *ProductRepository) GetAll(ctx context.Context) ([]model.Product, error) {
 	query, args, err := r.sq.
 		Select(
-			"id", "category_id", "name", "url", "price", "currency",
-			"picture", "vendor", "country", "description", "market_description",
-			"weight", "available", "params", "created_at", "COALESCE(updated_at, created_at)",
+			"id", "category_id", "COALESCE(name, '')", "COALESCE(url, '')", "COALESCE(price, 0)", "COALESCE(currency, '')",
+			"COALESCE(picture, '')", "COALESCE(vendor, '')", "COALESCE(country, '')", "COALESCE(description, '')", "COALESCE(market_description, '')",
+			"weight", "COALESCE(available, false)", "params", "created_at", "COALESCE(updated_at, created_at)",
 		).
 		From("products").
 		OrderBy("id").

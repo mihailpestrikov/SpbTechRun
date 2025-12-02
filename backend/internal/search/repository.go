@@ -27,6 +27,7 @@ func (r *Repository) EnsureIndex(ctx context.Context) error {
 	defer res.Body.Close()
 
 	if res.StatusCode == 200 {
+		r.updateIndexSettings(ctx)
 		return nil
 	}
 
@@ -45,6 +46,15 @@ func (r *Repository) EnsureIndex(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (r *Repository) updateIndexSettings(ctx context.Context) {
+	settings := strings.NewReader(`{"index": {"max_result_window": 100000}}`)
+	r.client.es.Indices.PutSettings(
+		settings,
+		r.client.es.Indices.PutSettings.WithIndex(IndexName),
+		r.client.es.Indices.PutSettings.WithContext(ctx),
+	)
 }
 
 func (r *Repository) IndexProduct(ctx context.Context, doc *ProductDocument) error {
@@ -127,14 +137,14 @@ func (r *Repository) BulkIndex(ctx context.Context, docs []ProductDocument) erro
 }
 
 type SearchQuery struct {
-	Text       string
-	CategoryID *int
-	MinPrice   *float64
-	MaxPrice   *float64
-	Vendor     *string
-	Available  *bool
-	Limit      int
-	Offset     int
+	Text        string
+	CategoryIDs []int
+	MinPrice    *float64
+	MaxPrice    *float64
+	Vendors     []string
+	Available   *bool
+	Limit       int
+	Offset      int
 }
 
 type Aggregations struct {
@@ -144,9 +154,10 @@ type Aggregations struct {
 }
 
 type CategoryAgg struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Count int64  `json:"count"`
+	ID       int    `json:"id"`
+	ParentID *int   `json:"parent_id"`
+	Name     string `json:"name"`
+	Count    int64  `json:"count"`
 }
 
 type VendorAgg struct {
@@ -210,10 +221,17 @@ func (r *Repository) parseSearchResponse(response *searchResponse) *SearchResult
 	}
 
 	for _, bucket := range response.Aggregations.Categories.Buckets {
+		catID := bucket.KeyInt()
+		parentID := r.categoryPath.GetParentID(catID)
+		var parentIDValue *int
+		if parentID != nil {
+			parentIDValue = parentID
+		}
 		aggs.Categories = append(aggs.Categories, CategoryAgg{
-			ID:    bucket.KeyInt(),
-			Name:  r.categoryPath.GetName(bucket.KeyInt()),
-			Count: bucket.DocCount,
+			ID:       catID,
+			ParentID: parentIDValue,
+			Name:     r.categoryPath.GetName(catID),
+			Count:    bucket.DocCount,
 		})
 	}
 
@@ -239,22 +257,27 @@ func (r *Repository) parseSearchResponse(response *searchResponse) *SearchResult
 func (r *Repository) buildQuery(q SearchQuery) map[string]interface{} {
 	must := []map[string]interface{}{}
 	filter := []map[string]interface{}{}
+	postFilter := []map[string]interface{}{}
 
 	if q.Text != "" {
 		must = append(must, map[string]interface{}{
 			"multi_match": map[string]interface{}{
-				"query":     q.Text,
-				"fields":    []string{"name^3", "name.autocomplete^2", "description", "vendor^2", "category_name"},
-				"type":      "best_fields",
-				"fuzziness": "AUTO",
+				"query":    q.Text,
+				"fields":   []string{"name^3", "name.keyword^4", "description", "vendor^2"},
+				"type":     "best_fields",
+				"operator": "and",
 			},
 		})
 	}
 
-	if q.CategoryID != nil {
-		filter = append(filter, map[string]interface{}{
-			"term": map[string]interface{}{
-				"category_path": *q.CategoryID,
+	if len(q.CategoryIDs) > 0 {
+		terms := make([]interface{}, len(q.CategoryIDs))
+		for i, id := range q.CategoryIDs {
+			terms[i] = id
+		}
+		postFilter = append(postFilter, map[string]interface{}{
+			"terms": map[string]interface{}{
+				"category_path": terms,
 			},
 		})
 	}
@@ -274,10 +297,14 @@ func (r *Repository) buildQuery(q SearchQuery) map[string]interface{} {
 		})
 	}
 
-	if q.Vendor != nil {
+	if len(q.Vendors) > 0 {
+		terms := make([]interface{}, len(q.Vendors))
+		for i, v := range q.Vendors {
+			terms[i] = v
+		}
 		filter = append(filter, map[string]interface{}{
-			"term": map[string]interface{}{
-				"vendor.keyword": *q.Vendor,
+			"terms": map[string]interface{}{
+				"vendor.keyword": terms,
 			},
 		})
 	}
@@ -309,12 +336,13 @@ func (r *Repository) buildQuery(q SearchQuery) map[string]interface{} {
 		limit = 20
 	}
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"query": map[string]interface{}{
 			"bool": boolQuery,
 		},
-		"from": q.Offset,
-		"size": limit,
+		"track_total_hits": true,
+		"from":             q.Offset,
+		"size":             limit,
 		"sort": []map[string]interface{}{
 			{"_score": map[string]interface{}{"order": "desc"}},
 			{"id": map[string]interface{}{"order": "asc"}},
@@ -322,14 +350,14 @@ func (r *Repository) buildQuery(q SearchQuery) map[string]interface{} {
 		"aggs": map[string]interface{}{
 			"categories": map[string]interface{}{
 				"terms": map[string]interface{}{
-					"field": "category_id",
-					"size":  20,
+					"field": "category_path",
+					"size":  5000,
 				},
 			},
 			"vendors": map[string]interface{}{
 				"terms": map[string]interface{}{
 					"field": "vendor.keyword",
-					"size":  20,
+					"size":  500,
 				},
 			},
 			"price_stats": map[string]interface{}{
@@ -339,6 +367,16 @@ func (r *Repository) buildQuery(q SearchQuery) map[string]interface{} {
 			},
 		},
 	}
+
+	if len(postFilter) > 0 {
+		result["post_filter"] = map[string]interface{}{
+			"bool": map[string]interface{}{
+				"filter": postFilter,
+			},
+		}
+	}
+
+	return result
 }
 
 func (r *Repository) Refresh(ctx context.Context) error {

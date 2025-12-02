@@ -31,3 +31,7 @@ func (c *Client) Redis() *redis.Client {
 func (c *Client) Close() error {
 	return c.rdb.Close()
 }
+
+func (c *Client) Ping(ctx context.Context) error {
+	return c.rdb.Ping(ctx).Err()
+}

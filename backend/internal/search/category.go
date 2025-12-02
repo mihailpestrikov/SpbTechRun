@@ -88,3 +88,13 @@ func (r *CategoryPathResolver) GetName(categoryID int) string {
 	}
 	return ""
 }
+
+func (r *CategoryPathResolver) GetParentID(categoryID int) *int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if cat, ok := r.categories[categoryID]; ok {
+		return cat.ParentID
+	}
+	return nil
+}

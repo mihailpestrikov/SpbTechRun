@@ -4,10 +4,6 @@ export interface Category {
   parent_id: number | null
 }
 
-export interface CategoryWithChildren extends Category {
-  children?: CategoryWithChildren[]
-}
-
 export interface Product {
   id: number
   category_id: number
@@ -98,4 +94,46 @@ export interface ProductFilter {
   search?: string
   limit?: number
   offset?: number
+}
+
+export interface SearchFilter {
+  q?: string
+  category_ids?: number[]
+  min_price?: number
+  max_price?: number
+  vendors?: string[]
+  available?: boolean
+  limit?: number
+  offset?: number
+}
+
+export interface CategoryAgg {
+  id: number
+  parent_id: number | null
+  name: string
+  count: number
+}
+
+export interface VendorAgg {
+  name: string
+  count: number
+}
+
+export interface PriceRange {
+  min: number
+  max: number
+}
+
+export interface SearchAggregations {
+  categories: CategoryAgg[]
+  vendors: VendorAgg[]
+  price_range?: PriceRange
+}
+
+export interface SearchResponse {
+  products: Product[]
+  total: number
+  limit: number
+  offset: number
+  aggregations: SearchAggregations
 }

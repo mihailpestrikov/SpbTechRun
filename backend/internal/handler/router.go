@@ -16,11 +16,12 @@ import (
 )
 
 type RouterDeps struct {
-	DB          *sql.DB
-	JWTSecret   string
-	RedisClient *cache.Client
-	SearchRepo  *search.Repository
-	ProductRepo *repository.ProductRepository
+	DB           *sql.DB
+	JWTSecret    string
+	RedisClient  *cache.Client
+	SearchRepo   *search.Repository
+	SearchClient *search.Client
+	ProductRepo  *repository.ProductRepository
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -36,14 +37,13 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 
 	productRepo := deps.ProductRepo
 
-	categoryCache := cache.NewCategoryCache(deps.RedisClient)
 	cartCache := cache.NewCartCache(deps.RedisClient)
 
 	authService := service.NewAuthService(userRepo, deps.JWTSecret)
 	cartService := service.NewCartService(cartRepo, productRepo, cartCache)
 	orderService := service.NewOrderService(orderRepo, cartRepo, productRepo, cartCache)
 
-	categoryHandler := NewCategoryHandler(categoryRepo, categoryCache)
+	categoryHandler := NewCategoryHandler(categoryRepo)
 	productHandler := NewProductHandler(productRepo)
 	cartHandler := NewCartHandler(cartService)
 	orderHandler := NewOrderHandler(orderService)
@@ -59,7 +59,38 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	optionalAuthMiddleware := middleware.OptionalAuth(authService)
 
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		health := gin.H{
+			"status":   "ok",
+			"postgres": "ok",
+			"redis":    "ok",
+		}
+
+		if err := deps.DB.PingContext(c.Request.Context()); err != nil {
+			health["status"] = "degraded"
+			health["postgres"] = "error"
+		}
+
+		if deps.RedisClient != nil {
+			if err := deps.RedisClient.Ping(c.Request.Context()); err != nil {
+				health["status"] = "degraded"
+				health["redis"] = "error"
+			}
+		}
+
+		if deps.SearchClient != nil {
+			if err := deps.SearchClient.Ping(c.Request.Context()); err != nil {
+				health["status"] = "degraded"
+				health["elasticsearch"] = "error"
+			} else {
+				health["elasticsearch"] = "ok"
+			}
+		}
+
+		status := http.StatusOK
+		if health["status"] == "degraded" {
+			status = http.StatusServiceUnavailable
+		}
+		c.JSON(status, health)
 	})
 
 	api := r.Group("/api")
@@ -72,9 +103,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 		api.GET("/products/:id", productHandler.GetProduct)
 
 		api.GET("/categories", categoryHandler.GetCategories)
-		api.GET("/categories/tree", categoryHandler.GetCategoryTree)
 		api.GET("/categories/:id", categoryHandler.GetCategory)
-		api.GET("/categories/:id/children", categoryHandler.GetCategoryChildren)
 
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)

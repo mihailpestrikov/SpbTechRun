@@ -11,14 +11,17 @@ import (
 )
 
 type Worker struct {
-	outboxRepo   *repository.OutboxRepository
-	productRepo  *repository.ProductRepository
-	searchRepo   *Repository
-	categoryPath *CategoryPathResolver
-	batchSize    int
-	pollInterval time.Duration
-	stopCh       chan struct{}
-	doneCh       chan struct{}
+	outboxRepo      *repository.OutboxRepository
+	productRepo     *repository.ProductRepository
+	searchRepo      *Repository
+	categoryPath    *CategoryPathResolver
+	batchSize       int
+	pollInterval    time.Duration
+	cleanupInterval time.Duration
+	cleanupAge      time.Duration
+	lastCleanup     time.Time
+	stopCh          chan struct{}
+	doneCh          chan struct{}
 }
 
 func NewWorker(
@@ -28,14 +31,16 @@ func NewWorker(
 	categoryPath *CategoryPathResolver,
 ) *Worker {
 	return &Worker{
-		outboxRepo:   outboxRepo,
-		productRepo:  productRepo,
-		searchRepo:   searchRepo,
-		categoryPath: categoryPath,
-		batchSize:    100,
-		pollInterval: 2 * time.Second,
-		stopCh:       make(chan struct{}),
-		doneCh:       make(chan struct{}),
+		outboxRepo:      outboxRepo,
+		productRepo:     productRepo,
+		searchRepo:      searchRepo,
+		categoryPath:    categoryPath,
+		batchSize:       100,
+		pollInterval:    2 * time.Second,
+		cleanupInterval: 1 * time.Hour,
+		cleanupAge:      7 * 24 * time.Hour, // 7 days
+		stopCh:          make(chan struct{}),
+		doneCh:          make(chan struct{}),
 	}
 }
 
@@ -64,7 +69,25 @@ func (w *Worker) run(ctx context.Context) {
 			if err := w.processBatch(ctx); err != nil {
 				slog.Error("outbox worker error", slog.String("error", err.Error()))
 			}
+			w.maybeCleanup(ctx)
 		}
+	}
+}
+
+func (w *Worker) maybeCleanup(ctx context.Context) {
+	if time.Since(w.lastCleanup) < w.cleanupInterval {
+		return
+	}
+
+	deleted, err := w.outboxRepo.DeleteOld(ctx, w.cleanupAge)
+	if err != nil {
+		slog.Error("outbox cleanup error", slog.String("error", err.Error()))
+		return
+	}
+
+	w.lastCleanup = time.Now()
+	if deleted > 0 {
+		slog.Info("outbox cleanup complete", slog.Int64("deleted", deleted))
 	}
 }
 
