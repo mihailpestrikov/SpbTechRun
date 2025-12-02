@@ -17,6 +17,8 @@ import (
 	"github.com/mpstrkv/spbtechrun/internal/config"
 	"github.com/mpstrkv/spbtechrun/internal/database"
 	"github.com/mpstrkv/spbtechrun/internal/handler"
+	"github.com/mpstrkv/spbtechrun/internal/repository"
+	"github.com/mpstrkv/spbtechrun/internal/search"
 )
 
 func main() {
@@ -46,8 +48,24 @@ func main() {
 	defer redisClient.Close()
 	log.Info("redis connected", slog.String("addr", cfg.Redis.Addr()))
 
+	categoryRepo := repository.NewCategoryRepository(db)
+	outboxRepo := repository.NewOutboxRepository(db)
+	productRepo := repository.NewProductRepository(db, outboxRepo)
+
+	searchComponents := search.Setup(context.Background(), cfg.Elastic.URL, categoryRepo, outboxRepo, productRepo)
+	var searchRepo *search.Repository
+	if searchComponents != nil {
+		searchRepo = searchComponents.Repository
+	}
+
 	gin.SetMode(gin.ReleaseMode)
-	router := handler.NewRouter(db, cfg.JWT.Secret, redisClient)
+	router := handler.NewRouter(handler.RouterDeps{
+		DB:          db,
+		JWTSecret:   cfg.JWT.Secret,
+		RedisClient: redisClient,
+		SearchRepo:  searchRepo,
+		ProductRepo: productRepo,
+	})
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),
@@ -62,6 +80,11 @@ func main() {
 		<-quit
 
 		log.Info("shutting down...")
+
+		if searchComponents != nil {
+			searchComponents.Stop()
+			log.Info("search worker stopped")
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

@@ -21,6 +21,7 @@ type Product struct {
 	Available         bool
 	Params            json.RawMessage
 	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type ProductFilter struct {

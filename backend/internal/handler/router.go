@@ -11,25 +11,35 @@ import (
 	"github.com/mpstrkv/spbtechrun/internal/cache"
 	"github.com/mpstrkv/spbtechrun/internal/middleware"
 	"github.com/mpstrkv/spbtechrun/internal/repository"
+	"github.com/mpstrkv/spbtechrun/internal/search"
 	"github.com/mpstrkv/spbtechrun/internal/service"
 )
 
-func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Engine {
+type RouterDeps struct {
+	DB          *sql.DB
+	JWTSecret   string
+	RedisClient *cache.Client
+	SearchRepo  *search.Repository
+	ProductRepo *repository.ProductRepository
+}
+
+func NewRouter(deps RouterDeps) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(corsMiddleware())
 	r.Use(loggerMiddleware())
 
-	categoryRepo := repository.NewCategoryRepository(db)
-	productRepo := repository.NewProductRepository(db)
-	userRepo := repository.NewUserRepository(db)
-	cartRepo := repository.NewCartRepository(db)
-	orderRepo := repository.NewOrderRepository(db)
+	categoryRepo := repository.NewCategoryRepository(deps.DB)
+	userRepo := repository.NewUserRepository(deps.DB)
+	cartRepo := repository.NewCartRepository(deps.DB)
+	orderRepo := repository.NewOrderRepository(deps.DB)
 
-	categoryCache := cache.NewCategoryCache(redisClient)
-	cartCache := cache.NewCartCache(redisClient)
+	productRepo := deps.ProductRepo
 
-	authService := service.NewAuthService(userRepo, jwtSecret)
+	categoryCache := cache.NewCategoryCache(deps.RedisClient)
+	cartCache := cache.NewCartCache(deps.RedisClient)
+
+	authService := service.NewAuthService(userRepo, deps.JWTSecret)
 	cartService := service.NewCartService(cartRepo, productRepo, cartCache)
 	orderService := service.NewOrderService(orderRepo, cartRepo, productRepo, cartCache)
 
@@ -40,6 +50,11 @@ func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Eng
 	authHandler := NewAuthHandler(authService, cartService)
 	recommendationHandler := NewRecommendationHandler()
 
+	var searchHandler *SearchHandler
+	if deps.SearchRepo != nil {
+		searchHandler = NewSearchHandler(deps.SearchRepo)
+	}
+
 	authMiddleware := middleware.Auth(authService)
 	optionalAuthMiddleware := middleware.OptionalAuth(authService)
 
@@ -49,6 +64,10 @@ func NewRouter(db *sql.DB, jwtSecret string, redisClient *cache.Client) *gin.Eng
 
 	api := r.Group("/api")
 	{
+		if searchHandler != nil {
+			api.GET("/search", searchHandler.Search)
+		}
+
 		api.GET("/products", productHandler.GetProducts)
 		api.GET("/products/:id", productHandler.GetProduct)
 

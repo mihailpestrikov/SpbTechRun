@@ -15,6 +15,22 @@ services:
     ports:
       - "6379:6379"
 
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: curl -s http://localhost:9200 >/dev/null || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   frontend:
     build: ./frontend
     ports:
@@ -29,9 +45,12 @@ services:
     environment:
       - POSTGRES_HOST=postgres
       - REDIS_HOST=redis
+      - ELASTIC_URL=http://elasticsearch:9200
     depends_on:
       - postgres
       - redis
+      - elasticsearch
 
 volumes:
   postgres_data:
+  elasticsearch_data:
