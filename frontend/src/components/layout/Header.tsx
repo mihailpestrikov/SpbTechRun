@@ -46,7 +46,7 @@ export function Header() {
               <div className="w-8 h-8 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
                 <User className="w-4 h-4 text-gray-600" />
               </div>
-              <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 hidden md:inline max-w-[120px] truncate">
+              <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 hidden md:inline max-w-[200px] truncate">
                 {user?.name}
               </span>
             </Link>

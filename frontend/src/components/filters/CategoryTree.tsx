@@ -168,7 +168,7 @@ export function CategoryTree({ categories, counts, selected, onChange }: Categor
   if (tree.length === 0) return null
 
   return (
-    <div className="space-y-0.5 max-h-64 overflow-y-auto scrollbar-thin -mx-2">
+    <div className="space-y-0.5 max-h-80 overflow-y-auto scrollbar-thin -mx-2">
       {tree.map((node) => renderNode(node, 0))}
     </div>
   )

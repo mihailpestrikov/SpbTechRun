@@ -191,7 +191,7 @@ export function HomePage() {
         )}
 
         <div className="flex gap-8">
-          <aside className="w-72 shrink-0">
+          <aside className="w-90 shrink-0">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-20">
               <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -213,7 +213,7 @@ export function HomePage() {
                 </button>
               </div>
 
-              <div className="p-4 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto scrollbar-thin">
+              <div className="p-5 space-y-6 max-h-[calc(100vh-180px)] overflow-y-auto scrollbar-thin">
                 {categories && categories.length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
