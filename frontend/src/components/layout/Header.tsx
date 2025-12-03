@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ShoppingCart, User, LogIn } from 'lucide-react'
+import { ShoppingCart, User, LogIn, Hammer } from 'lucide-react'
 import { useAuthStore, useCartStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { SearchBar } from './SearchBar'
@@ -19,6 +19,14 @@ export function Header() {
             S
           </div>
           <span className="hidden sm:inline">SpbTechRun</span>
+        </Link>
+
+        <Link
+          to="/scenarios"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-red-50 to-rose-50 hover:from-red-100 hover:to-rose-100 border border-red-100 transition-all duration-200 group shrink-0"
+        >
+          <Hammer className="w-4 h-4 text-red-500" />
+          <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 hidden md:inline">Сценарии</span>
         </Link>
 
         <div className="flex-1 max-w-2xl">

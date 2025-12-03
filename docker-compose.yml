@@ -41,6 +41,22 @@ services:
       timeout: 5s
       retries: 6
 
+  recommendations:
+    build: ./recommendations
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=spbtechrun
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=nomic-embed-text
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   frontend:
     build: ./frontend
     ports:
@@ -56,6 +72,7 @@ services:
       - POSTGRES_HOST=postgres
       - REDIS_HOST=redis
       - ELASTIC_URL=http://elasticsearch:9200
+      - RECOMMENDATIONS_URL=http://recommendations:8000
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,6 +80,8 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+      recommendations:
+        condition: service_started
 
 volumes:
   postgres_data:

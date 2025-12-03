@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	HTTPPort int `env:"HTTP_PORT" env-default:"8080"`
-	Postgres Postgres
-	Redis    Redis
-	Elastic  Elastic
-	JWT      JWT
+	HTTPPort           int    `env:"HTTP_PORT" env-default:"8080"`
+	RecommendationsURL string `env:"RECOMMENDATIONS_URL" env-default:"http://localhost:8000"`
+	Postgres           Postgres
+	Redis              Redis
+	Elastic            Elastic
+	JWT                JWT
 }
 
 type Postgres struct {

@@ -6,3 +6,9 @@ export {
 } from './useProducts'
 export { useRecommendations, useFeedback } from './useRecommendations'
 export { useOrders, useCreateOrder } from './useOrders'
+export {
+  useScenarios,
+  useScenario,
+  useScenarioRecommendations,
+  useAutoScenarioRecommendations,
+} from './useScenarios'

@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, X, SlidersHorizontal, Check, Sparkles } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, SlidersHorizontal, Check } from 'lucide-react'
 import { PageLayout } from '@/components/layout'
 import { ProductGrid } from '@/components/product'
 import { CategoryTree, buildCountsMap } from '@/components/filters'
+import { ScenarioCarousel } from '@/components/recommendations'
 import { useSearch, useCategories } from '@/hooks'
 import { useCartStore } from '@/store'
 import type { SearchFilter } from '@/types'
@@ -39,7 +40,7 @@ export function HomePage() {
   const debouncedMaxPrice = useDebounce(maxPrice, DEBOUNCE_MS)
   const debouncedVendors = useDebounce(selectedVendors, DEBOUNCE_MS)
 
-  const { fetchCart } = useCartStore()
+  const { fetchCart, items } = useCartStore()
   const { data: categories } = useCategories()
 
   useEffect(() => {
@@ -328,13 +329,7 @@ export function HomePage() {
 
           <div className="flex-1 min-w-0">
             {!searchQuery && (
-              <div className="bg-gradient-to-r from-red-50 to-rose-50 rounded-2xl p-6 mb-8 border border-red-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-5 h-5 text-red-500" />
-                  <h2 className="font-semibold text-gray-900">Рекомендуем вам</h2>
-                </div>
-                <p className="text-gray-600 text-sm">Персональные рекомендации появятся здесь</p>
-              </div>
+              <ScenarioCarousel cartProductIds={items.map(item => item.product_id)} />
             )}
 
             <ProductGrid products={products || []} isLoading={isLoading} />

@@ -8,6 +8,8 @@ import {
   OrderHistoryPage,
   LoginPage,
   RegisterPage,
+  ScenariosPage,
+  ScenarioDetailPage,
 } from './pages'
 
 const queryClient = new QueryClient({
@@ -31,6 +33,8 @@ function App() {
           <Route path="/orders" element={<OrderHistoryPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/scenarios" element={<ScenariosPage />} />
+          <Route path="/scenarios/:id" element={<ScenarioDetailPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

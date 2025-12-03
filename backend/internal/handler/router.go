@@ -16,12 +16,13 @@ import (
 )
 
 type RouterDeps struct {
-	DB           *sql.DB
-	JWTSecret    string
-	RedisClient  *cache.Client
-	SearchRepo   *search.Repository
-	SearchClient *search.Client
-	ProductRepo  *repository.ProductRepository
+	DB                 *sql.DB
+	JWTSecret          string
+	RedisClient        *cache.Client
+	SearchRepo         *search.Repository
+	SearchClient       *search.Client
+	ProductRepo        *repository.ProductRepository
+	RecommendationsURL string
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -48,7 +49,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	cartHandler := NewCartHandler(cartService)
 	orderHandler := NewOrderHandler(orderService)
 	authHandler := NewAuthHandler(authService, cartService)
-	recommendationHandler := NewRecommendationHandler()
+	recommendationHandler := NewRecommendationHandler(deps.RecommendationsURL)
 
 	var searchHandler *SearchHandler
 	if deps.SearchRepo != nil {
@@ -131,6 +132,12 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 		}
 
 		api.GET("/recommendations/:product_id", recommendationHandler.GetRecommendations)
+		api.GET("/recommendations/scenario/auto", recommendationHandler.GetAutoScenarioRecommendations)
+		api.GET("/scenarios", recommendationHandler.GetScenarios)
+		api.GET("/scenarios/:scenario_id", recommendationHandler.GetScenario)
+		api.GET("/scenarios/:scenario_id/recommendations", recommendationHandler.GetScenarioRecommendations)
+		api.POST("/feedback", recommendationHandler.PostFeedback)
+		api.GET("/ml/stats", recommendationHandler.GetStats)
 	}
 
 	return r

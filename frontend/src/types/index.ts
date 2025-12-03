@@ -48,6 +48,14 @@ export interface Recommendation {
   product: Product
   score: number
   reason: string
+  match_reasons?: MatchReason[]
+  rank?: number
+  group_name?: string
+}
+
+export interface MatchReason {
+  type: string
+  text: string
 }
 
 export interface User {
@@ -75,9 +83,13 @@ export interface OrderItem {
 }
 
 export interface FeedbackRequest {
-  main_product_id: number
+  main_product_id?: number
   recommended_product_id: number
   feedback: 'positive' | 'negative'
+  context?: 'product_page' | 'scenario'
+  scenario_id?: string
+  group_name?: string
+  user_id?: number
 }
 
 export interface AuthResponse {
@@ -136,4 +148,62 @@ export interface SearchResponse {
   limit: number
   offset: number
   aggregations: SearchAggregations
+}
+
+export interface Scenario {
+  id: string
+  name: string
+  description: string
+  image?: string
+  groups_count: number
+  required_groups: number
+}
+
+export interface ScenarioGroup {
+  name: string
+  category_ids: number[]
+  is_required: boolean
+  sort_order: number
+}
+
+export interface ScenarioDetails extends Scenario {
+  groups: ScenarioGroup[]
+}
+
+export interface ScenarioProgress {
+  completed: number
+  total: number
+  percentage: number
+}
+
+export interface GroupProduct {
+  id: number
+  name: string
+  price: number
+  picture?: string
+  category_name?: string
+  discount_price?: number
+  score: number
+  reason: string
+}
+
+export interface GroupRecommendation {
+  group_name: string
+  is_required: boolean
+  products: GroupProduct[]
+}
+
+export interface CompletedGroup {
+  group_name: string
+  is_required: boolean
+  status: string
+  cart_products: { id: number; name: string; price: number }[]
+}
+
+export interface ScenarioRecommendationsResponse {
+  scenario: { id: string; name: string }
+  progress: ScenarioProgress
+  recommendations: GroupRecommendation[]
+  completed_groups: CompletedGroup[]
+  all_scenarios: { id: string; name: string }[]
 }

@@ -29,4 +29,4 @@ Thumbs.db
 coverage.out
 
 # ML
-ml/data/
+data/data/

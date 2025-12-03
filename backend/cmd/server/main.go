@@ -59,12 +59,13 @@ func main() {
 	}
 
 	routerDeps := handler.RouterDeps{
-		DB:           db,
-		JWTSecret:    cfg.JWT.Secret,
-		RedisClient:  redisClient,
-		ProductRepo:  productRepo,
-		SearchRepo:   searchComponents.Repository,
-		SearchClient: searchComponents.Client,
+		DB:                 db,
+		JWTSecret:          cfg.JWT.Secret,
+		RedisClient:        redisClient,
+		ProductRepo:        productRepo,
+		SearchRepo:         searchComponents.Repository,
+		SearchClient:       searchComponents.Client,
+		RecommendationsURL: cfg.RecommendationsURL,
 	}
 
 	gin.SetMode(gin.ReleaseMode)

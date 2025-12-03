@@ -255,58 +255,111 @@ export function ProductPage() {
               <Sparkles className="w-5 h-5 text-red-500" />
               <h2 className="text-xl font-bold text-gray-900">Сопутствующие товары</h2>
             </div>
-            <p className="text-gray-500 text-sm mb-6">Помогите улучшить рекомендации — оцените подборку</p>
+            <p className="text-gray-500 text-sm mb-6">Рекомендации на основе ML-анализа. Помогите улучшить подборку — оцените товары</p>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {recommendations.map((rec) => (
-                <div key={rec.product.id} className="group bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-100">
-                  <Link to={`/product/${rec.product.id}`}>
-                    <div className="aspect-square rounded-lg overflow-hidden bg-white mb-3">
-                      {rec.product.picture ? (
-                        <img
-                          src={rec.product.picture}
-                          alt={rec.product.name}
-                          className="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-300">
-                          <Package className="w-10 h-10" />
+              {recommendations.map((rec) => {
+                const scorePercent = Math.round(rec.score * 100)
+                const hasDiscount = rec.product.discount_price && rec.product.discount_price < rec.product.price
+                const displayPrice = rec.product.discount_price || rec.product.price
+
+                return (
+                  <div key={rec.product.id} className="group bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-100 flex flex-col">
+                    <Link to={`/product/${rec.product.id}`} className="flex-1">
+                      <div className="relative aspect-square rounded-lg overflow-hidden bg-white mb-3">
+                        {hasDiscount && (
+                          <div className="absolute top-2 left-2 z-10 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold px-2 py-1 rounded">
+                            Скидка
+                          </div>
+                        )}
+                        {rec.product.picture ? (
+                          <img
+                            src={rec.product.picture}
+                            alt={rec.product.name}
+                            className="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-300">
+                            <Package className="w-10 h-10" />
+                          </div>
+                        )}
+                      </div>
+                      <h3 className="font-medium text-gray-800 text-sm line-clamp-2 min-h-[2.5rem] group-hover:text-red-600 transition-colors">
+                        {capitalize(rec.product.name)}
+                      </h3>
+                      <div className="mt-1">
+                        {hasDiscount ? (
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-red-600 font-bold">{displayPrice.toLocaleString()} ₽</span>
+                            <span className="text-xs text-gray-400 line-through">{rec.product.price.toLocaleString()} ₽</span>
+                          </div>
+                        ) : (
+                          <p className="text-red-600 font-bold">{displayPrice.toLocaleString()} ₽</p>
+                        )}
+                      </div>
+                    </Link>
+
+                    <div className="mt-2 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all duration-500"
+                            style={{ width: `${scorePercent}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500 font-medium w-8">{scorePercent}%</span>
+                      </div>
+
+                      {rec.match_reasons && rec.match_reasons.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {rec.match_reasons.slice(0, 2).map((mr, idx) => (
+                            <span
+                              key={idx}
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                mr.type === 'category' ? 'bg-blue-50 text-blue-600' :
+                                mr.type === 'feedback' ? 'bg-green-50 text-green-600' :
+                                mr.type === 'semantic' ? 'bg-purple-50 text-purple-600' :
+                                'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              {mr.text}
+                            </span>
+                          ))}
                         </div>
                       )}
-                    </div>
-                    <h3 className="font-medium text-gray-800 text-sm line-clamp-2 min-h-[2.5rem] group-hover:text-red-600 transition-colors">
-                      {capitalize(rec.product.name)}
-                    </h3>
-                    <p className="text-red-600 font-bold mt-1">{rec.product.price.toLocaleString()} ₽</p>
-                  </Link>
-                  <p className="text-xs text-gray-400 mt-1 line-clamp-1">{rec.reason}</p>
 
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => handleFeedback(rec.product.id, 'positive')}
-                      disabled={!!feedbackGiven[rec.product.id]}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 ${
-                        feedbackGiven[rec.product.id] === 'positive'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-white border border-gray-200 text-gray-600 hover:border-green-300 hover:text-green-600'
-                      } disabled:opacity-60`}
-                    >
-                      <ThumbsUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleFeedback(rec.product.id, 'negative')}
-                      disabled={!!feedbackGiven[rec.product.id]}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 ${
-                        feedbackGiven[rec.product.id] === 'negative'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-white border border-gray-200 text-gray-600 hover:border-red-300 hover:text-red-600'
-                      } disabled:opacity-60`}
-                    >
-                      <ThumbsDown className="w-4 h-4" />
-                    </button>
+                      {!rec.match_reasons && rec.reason && (
+                        <p className="text-[10px] text-gray-400 line-clamp-1">{rec.reason}</p>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => handleFeedback(rec.product.id, 'positive')}
+                        disabled={!!feedbackGiven[rec.product.id]}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 ${
+                          feedbackGiven[rec.product.id] === 'positive'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-white border border-gray-200 text-gray-600 hover:border-green-300 hover:text-green-600'
+                        } disabled:opacity-60`}
+                      >
+                        <ThumbsUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleFeedback(rec.product.id, 'negative')}
+                        disabled={!!feedbackGiven[rec.product.id]}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 ${
+                          feedbackGiven[rec.product.id] === 'negative'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-white border border-gray-200 text-gray-600 hover:border-red-300 hover:text-red-600'
+                        } disabled:opacity-60`}
+                      >
+                        <ThumbsDown className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
