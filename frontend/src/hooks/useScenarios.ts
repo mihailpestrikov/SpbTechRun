@@ -26,6 +26,7 @@ export function useScenarioRecommendations(scenarioId: string, cartProductIds: n
     queryKey: ['scenarioRecommendations', scenarioId, cartProductIds],
     queryFn: () => getScenarioRecommendations(scenarioId, cartProductIds),
     enabled: !!scenarioId,
+    placeholderData: (previousData) => previousData,
   })
 }
 

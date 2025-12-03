@@ -70,14 +70,13 @@ async def get_scenario(scenario_id: str):
 async def get_scenario_recommendations(
     scenario_id: str,
     cart_product_ids: str = Query(default="", description="Comma-separated product IDs in cart"),
-    limit_per_group: int = Query(default=6, le=10),
+    limit_per_group: int = Query(default=10, le=20),
     session: AsyncSession = Depends(get_session),
 ):
     """
     Рекомендации для сценария с учётом корзины.
     Возвращает недостающие товары для завершения сценария.
     """
-    # Парсим ID товаров
     cart_ids = []
     if cart_product_ids:
         try:
@@ -138,7 +137,6 @@ async def post_feedback(
         raise HTTPException(status_code=400, detail="Feedback must be 'positive' or 'negative'")
 
     if request.context == "scenario" and request.scenario_id and request.group_name:
-        # Тип 2: Фидбек на сценарий
         await queries.record_scenario_feedback(
             session=session,
             scenario_id=request.scenario_id,
@@ -148,7 +146,6 @@ async def post_feedback(
             user_id=request.user_id,
         )
     elif request.main_product_id:
-        # Тип 1: Фидбек на пару товаров
         await queries.record_pair_feedback(
             session=session,
             main_product_id=request.main_product_id,
@@ -281,9 +278,9 @@ async def get_stats(session: AsyncSession = Depends(get_session)):
         """)
     )
     row = result.fetchone()
-    total_feedback = row[0] or 0 if row else 0
-    positive_feedback = row[1] or 0 if row else 0
-    negative_feedback = row[2] or 0 if row else 0
+    total_feedback = (row[0] or 0) if row else 0
+    positive_feedback = (row[1] or 0) if row else 0
+    negative_feedback = (row[2] or 0) if row else 0
 
     return StatsResponse(
         embeddings_count=embeddings_count,

@@ -114,7 +114,7 @@ export function ScenarioCarousel({ cartProductIds }: CarouselProps) {
               to={`/product/${product.id}`}
               className="group w-48 flex-shrink-0 bg-white rounded-xl p-4 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-100"
             >
-              <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-50 mb-3">
+              <div className="relative aspect-square rounded-lg overflow-hidden bg-white mb-3">
                 {hasDiscount && (
                   <div className="absolute top-2 left-2 z-10 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold px-2 py-1 rounded">
                     -{Math.round((1 - product.discount_price! / product.price) * 100)}%

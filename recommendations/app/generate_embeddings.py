@@ -5,13 +5,17 @@
 
 import asyncio
 import json
+import logging
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from .core.config import settings
 from .core.embeddings import OllamaEmbeddings, build_product_text
-from .db.models import ProductEmbedding, Base
+from .db.models import Base
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = f"postgresql+asyncpg://{settings.postgres_user}:{settings.postgres_password}@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
 
@@ -46,23 +50,20 @@ async def generate_all_embeddings(batch_size: int = 100):
     ollama = OllamaEmbeddings()
 
     async with async_session_factory() as session:
-        result = await session.execute(
-            text("SELECT COUNT(*) FROM products")
-        )
+        result = await session.execute(text("SELECT COUNT(*) FROM products"))
         total_products = result.scalar()
-        print(f"Total products: {total_products}")
+        logger.info(f"Total products: {total_products}")
 
         result = await session.execute(
             text("SELECT COUNT(*) FROM product_embeddings WHERE embedding IS NOT NULL")
         )
         existing_embeddings = result.scalar()
-        print(f"Existing embeddings: {existing_embeddings}")
+        logger.info(f"Existing embeddings: {existing_embeddings}")
 
-        offset = 0
         processed = 0
         errors = 0
 
-        while offset < total_products:
+        while True:
             result = await session.execute(
                 text("""
                     SELECT p.id, p.name, p.category_id, p.vendor, p.description, p.params
@@ -70,9 +71,9 @@ async def generate_all_embeddings(batch_size: int = 100):
                     LEFT JOIN product_embeddings pe ON p.id = pe.product_id
                     WHERE pe.product_id IS NULL
                     ORDER BY p.id
-                    LIMIT :limit OFFSET :offset
+                    LIMIT :limit
                 """),
-                {"limit": batch_size, "offset": 0}
+                {"limit": batch_size}
             )
             products = result.fetchall()
 
@@ -81,14 +82,13 @@ async def generate_all_embeddings(batch_size: int = 100):
 
             for product in products:
                 product_id, name, category_id, vendor, description, params = product
-
                 category_path = await get_category_path(session, category_id) if category_id else ""
 
                 params_dict = None
                 if params:
                     try:
                         params_dict = json.loads(params) if isinstance(params, str) else params
-                    except:
+                    except (json.JSONDecodeError, TypeError):
                         pass
 
                 text_repr = build_product_text(
@@ -109,11 +109,7 @@ async def generate_all_embeddings(batch_size: int = 100):
                             ON CONFLICT (product_id) DO UPDATE
                             SET embedding = :embedding, text_representation = :text_repr, created_at = NOW()
                         """),
-                        {
-                            "product_id": product_id,
-                            "embedding": embedding,
-                            "text_repr": text_repr,
-                        }
+                        {"product_id": product_id, "embedding": embedding, "text_repr": text_repr}
                     )
                     processed += 1
                 else:
@@ -121,12 +117,11 @@ async def generate_all_embeddings(batch_size: int = 100):
 
                 if processed % 10 == 0:
                     await session.commit()
-                    print(f"Processed: {processed}, Errors: {errors}")
+                    logger.info(f"Processed: {processed}, Errors: {errors}")
 
             await session.commit()
-            offset += batch_size
 
-        print(f"Done! Processed: {processed}, Errors: {errors}")
+        logger.info(f"Done! Processed: {processed}, Errors: {errors}")
 
 
 if __name__ == "__main__":

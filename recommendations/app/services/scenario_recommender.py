@@ -1,8 +1,3 @@
-"""
-Тип 2: Рекомендации по сценарию для главной страницы.
-GET /scenarios/{id}/recommendations → недостающие товары для завершения сценария
-"""
-
 import numpy as np
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,33 +8,28 @@ from .scenarios import scenarios_service, Scenario
 
 
 class ScenarioRecommender:
+    """Тип 2: Рекомендации по сценарию для главной страницы."""
+
     async def get_recommendations(
         self,
         scenario_id: str,
         cart_product_ids: list[int],
         session: AsyncSession,
-        limit_per_group: int = 6,
+        limit_per_group: int = 10,
     ) -> dict:
         """
         Возвращает рекомендации для сценария с учётом корзины.
-
-        Алгоритм:
-        1. Определяем какие группы закрыты товарами из корзины
-        2. Для незакрытых групп подбираем товары (ML-скоринг)
-        3. Если всё закрыто — показываем альтернативы
+        Определяет какие группы закрыты, для незакрытых подбирает товары.
         """
         scenario = scenarios_service.get_scenario(scenario_id)
         if not scenario:
             return {"error": "Scenario not found"}
 
-        # Получаем информацию о товарах в корзине
         cart_products = await queries.get_products_by_ids(session, cart_product_ids)
         cart_category_ids = [p["category_id"] for p in cart_products.values()]
 
-        # Определяем статус групп
         groups_status = self._analyze_groups(scenario, cart_products, cart_category_ids)
 
-        # Для незакрытых групп подбираем рекомендации
         recommendations = []
         for missing_group in groups_status["missing"]:
             group_recs = await self._get_group_recommendations(
@@ -59,7 +49,6 @@ class ScenarioRecommender:
                     "products": group_recs,
                 })
 
-        # Если все группы закрыты — показываем альтернативы
         if not recommendations and groups_status["completed"]:
             alternatives = await self._get_alternatives(
                 scenario=scenario,
@@ -74,7 +63,6 @@ class ScenarioRecommender:
                     "products": alternatives,
                 })
 
-        # Считаем прогресс
         total_required = sum(1 for g in scenario.groups if g.is_required)
         completed_required = len([
             g for g in groups_status["completed"]
@@ -111,7 +99,6 @@ class ScenarioRecommender:
         missing = []
 
         for group in sorted(scenario.groups, key=lambda g: g.sort_order):
-            # Какие товары из корзины закрывают эту группу?
             products_in_group = [
                 cart_products[pid] for pid in cart_ids
                 if cart_products[pid]["category_id"] in group.category_ids
@@ -152,7 +139,6 @@ class ScenarioRecommender:
 
         cart_ids = list(cart_products.keys())
 
-        # Все товары из категорий группы
         candidates = await queries.get_products_by_categories(
             session, category_ids, exclude_ids=cart_ids, limit=100
         )
@@ -160,11 +146,9 @@ class ScenarioRecommender:
         if not candidates:
             return []
 
-        # Получаем эмбеддинги
         candidate_ids = [p["id"] for p in candidates]
         embeddings_map = await queries.get_embeddings_map(session, candidate_ids)
 
-        # Эмбеддинги товаров в корзине
         cart_embeddings_map = await queries.get_embeddings_map(session, cart_ids)
         cart_embeddings = [
             np.array(e, dtype=np.float32)
@@ -172,12 +156,10 @@ class ScenarioRecommender:
             if e is not None
         ]
 
-        # Статистика фидбека
         scenario_stats = await queries.get_scenario_feedback_stats(
             session, scenario.id, group_name, candidate_ids
         )
 
-        # Скорируем кандидатов
         scored = []
         for product in candidates:
             pid = product["id"]
@@ -188,7 +170,6 @@ class ScenarioRecommender:
                 stats=scenario_stats.get(pid, {"positive": 0, "negative": 0}),
             )
 
-            # Причина рекомендации
             stats = scenario_stats.get(pid, {"positive": 0, "negative": 0})
             total = stats["positive"] + stats["negative"]
             if total > 0:
@@ -221,28 +202,25 @@ class ScenarioRecommender:
         cart_embeddings: list[np.ndarray],
         stats: dict,
     ) -> float:
-        """Скор для товара в группе (формула из ML2.md)"""
-        score = 0.5  # базовый
+        """Скор для товара в группе"""
+        score = 0.5
 
-        # === СЕМАНТИЧЕСКАЯ БЛИЗОСТЬ к корзине ===
         if embedding and cart_embeddings:
             emb_vec = np.array(embedding, dtype=np.float32)
             max_sim = max(
                 cosine_similarity(emb_vec, cart_emb)
                 for cart_emb in cart_embeddings
             )
-            score += max_sim * 0.3  # до +0.3
+            score += max_sim * 0.3
 
-        # === ФИДБЕК ===
         total = stats["positive"] + stats["negative"]
         if total > 0:
             approval_rate = (stats["positive"] + 1) / (total + 2)
-            score += (approval_rate - 0.5) * 0.5  # от -0.25 до +0.25
+            score += (approval_rate - 0.5) * 0.5
 
-        # === СКИДКА ===
         if product.get("discount_price") and product.get("price"):
             discount_percent = (product["price"] - product["discount_price"]) / product["price"]
-            score += discount_percent * 0.2  # до +0.2
+            score += discount_percent * 0.2
 
         return min(max(score, 0), 1)
 
@@ -257,7 +235,6 @@ class ScenarioRecommender:
         alternatives = []
 
         for product in cart_products.values():
-            # Товары из той же категории, но другого бренда
             similar = await queries.get_products_by_categories(
                 session,
                 [product["category_id"]],
@@ -301,23 +278,21 @@ class ScenarioRecommender:
         Используется на главной странице.
         """
         if not cart_product_ids:
-            # Пустая корзина — показываем первый сценарий
-            first_scenario = list(scenarios_service.scenarios.values())[0]
+            scenarios = list(scenarios_service.scenarios.values())
+            if not scenarios:
+                return {"error": "No scenarios configured"}
             return await self.get_recommendations(
-                scenario_id=first_scenario.id,
+                scenario_id=scenarios[0].id,
                 cart_product_ids=[],
                 session=session,
             )
 
-        # Получаем категории товаров в корзине
         cart_products = await queries.get_products_by_ids(session, cart_product_ids)
         cart_category_ids = [p["category_id"] for p in cart_products.values()]
 
-        # Определяем приоритетный сценарий
         match = scenarios_service.detect_scenario_for_cart(cart_category_ids)
 
         if not match:
-            # Не удалось определить — берём первый сценарий
             first_scenario = list(scenarios_service.scenarios.values())[0]
             return await self.get_recommendations(
                 scenario_id=first_scenario.id,

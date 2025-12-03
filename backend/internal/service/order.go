@@ -105,6 +105,8 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int) (*OrderWithI
 
 	_ = s.cartCache.InvalidateUserCart(ctx, userID)
 
+	go s.productRepo.IncrementOrderCount(ctx, productIDs)
+
 	productPtrs := make(map[int]*model.Product)
 	for id, p := range products {
 		p := p

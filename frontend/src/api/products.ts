@@ -26,3 +26,10 @@ export async function searchProducts(query: string, limit = 10): Promise<Product
   const { data } = await apiClient.get<ProductListResponse>(`/products?search=${encodeURIComponent(query)}&limit=${limit}`)
   return data.products
 }
+
+export async function trackProductView(productId: number): Promise<void> {
+  try {
+    await apiClient.post(`/products/${productId}/view`)
+  } catch {
+  }
+}

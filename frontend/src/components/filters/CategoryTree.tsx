@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { ChevronRight, Check } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import type { Category, CategoryAgg } from '@/types'
 
 interface CategoryTreeProps {
@@ -122,42 +122,28 @@ export function CategoryTree({ categories, counts, selected, onChange }: Categor
     const count = counts.get(node.id)
 
     return (
-      <div key={node.id} className="animate-fade-in">
-        <label
-          className={`flex items-center gap-2 py-2 px-2 rounded-lg cursor-pointer transition-all duration-200 group ${
-            isSelected ? 'bg-red-50' : 'hover:bg-gray-50'
-          }`}
-          style={{ paddingLeft: `${level * 12 + 8}px` }}
+      <div key={node.id}>
+        <button
+          type="button"
+          onClick={() => toggleSelect(node.id, hasChildren)}
+          className={`flex items-center gap-2 py-2 w-full text-left rounded-lg ${isSelected ? 'bg-red-50' : 'hover:bg-gray-50'}`}
+          style={{ paddingLeft: `${level * 16 + 8}px`, paddingRight: '8px' }}
         >
-          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-            isSelected
-              ? 'bg-red-500 border-red-500'
-              : 'border-gray-300 group-hover:border-gray-400'
+          <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+            isSelected ? 'border-red-500 bg-red-500' : 'border-gray-300'
           }`}>
-            {isSelected && <Check className="w-3 h-3 text-white" />}
-          </div>
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => toggleSelect(node.id, hasChildren)}
-            className="sr-only"
-          />
+            {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+          </span>
           {hasChildren && (
             <ChevronRight
-              className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${
-                isExpanded ? 'rotate-90' : ''
-              }`}
+              className={`w-4 h-4 text-gray-400 flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
             />
           )}
-          <span className={`text-sm flex-1 truncate ${isSelected ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
-            {node.name}
-          </span>
-          <span className={`text-xs flex-shrink-0 ${isSelected ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
-            {count ?? 0}
-          </span>
-        </label>
+          <span className={`text-sm flex-1 truncate ${isSelected ? 'font-medium text-gray-900' : 'text-gray-700'}`}>{node.name}</span>
+          <span className={`text-xs ${isSelected ? 'text-red-600 font-medium' : 'text-gray-500'}`}>{count ?? 0}</span>
+        </button>
         {hasChildren && isExpanded && (
-          <div className="overflow-hidden animate-slide-down">
+          <div>
             {node.children.map((child) => renderNode(child, level + 1))}
           </div>
         )}
@@ -168,7 +154,7 @@ export function CategoryTree({ categories, counts, selected, onChange }: Categor
   if (tree.length === 0) return null
 
   return (
-    <div className="space-y-0.5 max-h-80 overflow-y-auto scrollbar-thin -mx-2">
+    <div className="space-y-0.5 max-h-64 overflow-y-auto">
       {tree.map((node) => renderNode(node, 0))}
     </div>
   )

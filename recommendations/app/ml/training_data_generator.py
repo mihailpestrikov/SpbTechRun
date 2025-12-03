@@ -220,10 +220,7 @@ class TrainingDataGenerator:
         positive_samples: List[Dict],
         ratio: int = 3,
     ) -> List[Dict]:
-        """
-        Генерирует hard negatives: случайные товары для каждого main_product.
-        Hard negatives важны для обучения различать релевантное от нерелевантного.
-        """
+        """Генерирует hard negatives: случайные товары для каждого main_product."""
         if not positive_samples:
             return []
 
