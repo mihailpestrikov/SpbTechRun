@@ -68,6 +68,16 @@ func (h *RecommendationHandler) GetStats(c *gin.Context) {
 	h.proxyRequest(c, "GET", url, nil)
 }
 
+func (h *RecommendationHandler) PostEvent(c *gin.Context) {
+	url := fmt.Sprintf("%s/events", h.mlURL)
+	h.proxyRequest(c, "POST", url, c.Request.Body)
+}
+
+func (h *RecommendationHandler) PostEventsBatch(c *gin.Context) {
+	url := fmt.Sprintf("%s/events/batch", h.mlURL)
+	h.proxyRequest(c, "POST", url, c.Request.Body)
+}
+
 func (h *RecommendationHandler) proxyRequest(c *gin.Context, method, url string, body io.Reader) {
 	req, err := http.NewRequestWithContext(c.Request.Context(), method, url, body)
 	if err != nil {

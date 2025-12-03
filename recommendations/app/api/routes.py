@@ -16,6 +16,8 @@ from .schemas import (
     FeedbackRequest,
     FeedbackResponse,
     StatsResponse,
+    RecommendationEventRequest,
+    RecommendationEventResponse,
 )
 
 router = APIRouter()
@@ -25,8 +27,6 @@ router = APIRouter()
 async def health():
     return {"status": "ok"}
 
-
-# ==== ТИП 1: Рекомендации на странице товара ====
 
 @router.get("/recommendations/{product_id}")
 async def get_product_recommendations(
@@ -50,7 +50,6 @@ async def get_product_recommendations(
     return result
 
 
-# ==== ТИП 2: Рекомендации по сценариям ====
 
 @router.get("/scenarios", response_model=list[ScenarioResponse])
 async def list_scenarios():
@@ -123,7 +122,6 @@ async def get_auto_scenario_recommendations(
     return result
 
 
-# ==== Фидбек ====
 
 @router.post("/feedback", response_model=FeedbackResponse)
 async def post_feedback(
@@ -168,7 +166,98 @@ async def post_feedback(
     return FeedbackResponse(success=True, message="Feedback recorded")
 
 
-# ==== Статистика ====
+
+@router.post("/events", response_model=RecommendationEventResponse)
+async def log_recommendation_event(
+    request: RecommendationEventRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Логирует событие взаимодействия с рекомендацией.
+
+    Типы событий:
+    - impression: рекомендация показана пользователю
+    - click: пользователь кликнул на рекомендацию
+    - add_to_cart: пользователь добавил рекомендованный товар в корзину
+
+    Эти данные используются для обучения CatBoost ранкера.
+    """
+    if request.event_type not in ("impression", "click", "add_to_cart"):
+        raise HTTPException(
+            status_code=400,
+            detail="event_type must be 'impression', 'click', or 'add_to_cart'"
+        )
+
+    if not request.user_id and not request.session_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Either user_id or session_id must be provided"
+        )
+
+    await session.execute(
+        text("""
+            INSERT INTO recommendation_events
+                (user_id, session_id, event_type, main_product_id, recommended_product_id,
+                 recommendation_context, recommendation_rank)
+            VALUES (:user_id, :session_id, :event_type, :main_product_id, :recommended_product_id,
+                    :context, :rank)
+        """),
+        {
+            "user_id": request.user_id,
+            "session_id": request.session_id,
+            "event_type": request.event_type,
+            "main_product_id": request.main_product_id,
+            "recommended_product_id": request.recommended_product_id,
+            "context": request.recommendation_context,
+            "rank": request.recommendation_rank,
+        }
+    )
+    await session.commit()
+
+    return RecommendationEventResponse(success=True, events_logged=1)
+
+
+@router.post("/events/batch", response_model=RecommendationEventResponse)
+async def log_recommendation_events_batch(
+    events: list[RecommendationEventRequest],
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Батчевое логирование событий (для impressions — когда показываем много рекомендаций сразу).
+    """
+    if not events:
+        return RecommendationEventResponse(success=True, events_logged=0)
+
+    for event in events:
+        if event.event_type not in ("impression", "click", "add_to_cart"):
+            continue
+        if not event.user_id and not event.session_id:
+            continue
+
+        await session.execute(
+            text("""
+                INSERT INTO recommendation_events
+                    (user_id, session_id, event_type, main_product_id, recommended_product_id,
+                     recommendation_context, recommendation_rank)
+                VALUES (:user_id, :session_id, :event_type, :main_product_id, :recommended_product_id,
+                        :context, :rank)
+            """),
+            {
+                "user_id": event.user_id,
+                "session_id": event.session_id,
+                "event_type": event.event_type,
+                "main_product_id": event.main_product_id,
+                "recommended_product_id": event.recommended_product_id,
+                "context": event.recommendation_context,
+                "rank": event.recommendation_rank,
+            }
+        )
+
+    await session.commit()
+
+    return RecommendationEventResponse(success=True, events_logged=len(events))
+
+
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(session: AsyncSession = Depends(get_session)):
@@ -206,7 +295,6 @@ async def get_stats(session: AsyncSession = Depends(get_session)):
     )
 
 
-# ==== ML: CatBoost Ranker ====
 
 @router.post("/ml/train")
 async def train_catboost_model(

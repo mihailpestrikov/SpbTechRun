@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { ChevronRight, Minus, Plus, ShoppingCart, Check, ThumbsUp, ThumbsDown, Package, Sparkles } from 'lucide-react'
@@ -6,6 +6,7 @@ import { PageLayout } from '@/components/layout'
 import { useProduct, useRecommendations, useFeedback, useCategories } from '@/hooks'
 import { useCartStore } from '@/store'
 import { capitalize } from '@/lib/utils'
+import { logRecommendationEvent, logRecommendationImpressions } from '@/api/recommendations'
 import type { Category } from '@/types'
 
 function ProductSkeleton() {
@@ -65,10 +66,34 @@ export function ProductPage() {
   const isInCart = !!cartItem
 
   const [feedbackGiven, setFeedbackGiven] = useState<Record<number, 'positive' | 'negative'>>({})
+  const impressionsLogged = useRef(false)
+
+  // Логируем impressions когда рекомендации загрузились
+  useEffect(() => {
+    if (recommendations && recommendations.length > 0 && !impressionsLogged.current) {
+      impressionsLogged.current = true
+      logRecommendationImpressions(productId, recommendations, 'product_page')
+    }
+  }, [recommendations, productId])
+
+  // Сбрасываем флаг при смене товара
+  useEffect(() => {
+    impressionsLogged.current = false
+  }, [productId])
 
   const handleFeedback = (recommendedId: number, type: 'positive' | 'negative') => {
     sendFeedback({ main_product_id: productId, recommended_product_id: recommendedId, feedback: type })
     setFeedbackGiven((prev) => ({ ...prev, [recommendedId]: type }))
+  }
+
+  const handleRecommendationClick = (recommendedId: number, rank: number) => {
+    logRecommendationEvent({
+      event_type: 'click',
+      main_product_id: productId,
+      recommended_product_id: recommendedId,
+      recommendation_context: 'product_page',
+      recommendation_rank: rank,
+    })
   }
 
   const handleAddToCart = () => {
@@ -258,14 +283,15 @@ export function ProductPage() {
             <p className="text-gray-500 text-sm mb-6">Рекомендации на основе ML-анализа. Помогите улучшить подборку — оцените товары</p>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {recommendations.map((rec) => {
+              {recommendations.map((rec, index) => {
                 const scorePercent = Math.round(rec.score * 100)
                 const hasDiscount = rec.product.discount_price && rec.product.discount_price < rec.product.price
                 const displayPrice = rec.product.discount_price || rec.product.price
+                const rank = index + 1
 
                 return (
                   <div key={rec.product.id} className="group bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-100 flex flex-col">
-                    <Link to={`/product/${rec.product.id}`} className="flex-1">
+                    <Link to={`/product/${rec.product.id}`} className="flex-1" onClick={() => handleRecommendationClick(rec.product.id, rank)}>
                       <div className="relative aspect-square rounded-lg overflow-hidden bg-white mb-3">
                         {hasDiscount && (
                           <div className="absolute top-2 left-2 z-10 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold px-2 py-1 rounded">
