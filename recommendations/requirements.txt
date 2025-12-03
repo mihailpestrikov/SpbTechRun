@@ -9,3 +9,6 @@ httpx==0.26.0
 numpy==1.26.3
 faiss-cpu==1.7.4
 python-dotenv==1.0.0
+catboost==1.2.7
+scikit-learn==1.4.0
+pandas==2.2.0

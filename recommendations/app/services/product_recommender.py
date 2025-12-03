@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.embeddings import cosine_similarity
 from ..db import queries
 from .scenarios import scenarios_service
+from ..ml.catboost_ranker import catboost_ranker
 
 
 class ProductRecommender:
@@ -52,14 +53,16 @@ class ProductRecommender:
         product_id: int,
         session: AsyncSession,
         limit: int = 20,
+        use_ml: bool = True,
     ) -> dict:
         """
         Возвращает рекомендации для товара.
         Алгоритм:
         1. Определяем сценарий товара по категории
-        2. Получаем товары из связанных групп сценария
-        3. Скорируем: эмбеддинги + фидбек + скидки
-        4. Возвращаем топ-20
+        2. Получаем кандидатов из связанных групп сценария (топ-100)
+        3. Если use_ml=True и модель обучена: переранжируем с помощью CatBoost
+        4. Иначе: используем формульный скоринг (эмбеддинги + фидбек + скидки)
+        5. Возвращаем топ-20
         """
         # Получаем информацию о товаре
         product = await queries.get_product_by_id(session, product_id)
@@ -72,14 +75,51 @@ class ProductRecommender:
 
         if scenario:
             detected_scenario = {"id": scenario.id, "name": scenario.name}
+            # Получаем больше кандидатов для ML-переранжирования
+            candidate_limit = 100 if use_ml else limit
             recommendations = await self._get_scenario_based_recommendations(
-                product, scenario, session, limit
+                product, scenario, session, candidate_limit
             )
         else:
             # Фолбэк на семантический поиск
+            candidate_limit = 100 if use_ml else limit
             recommendations = await self._get_semantic_recommendations(
-                product, session, limit
+                product, session, candidate_limit
             )
+
+        # === ML ПЕРЕРАНЖИРОВАНИЕ ===
+        ranking_method = "formula"
+        if use_ml and catboost_ranker.model and recommendations:
+            try:
+                # Конвертируем формат для CatBoost
+                candidates = [rec["product"] for rec in recommendations]
+                ranked_candidates = await catboost_ranker.rank_candidates(
+                    main_product=product,
+                    candidates=candidates,
+                    session=session,
+                )
+
+                # Обновляем рекомендации с ML-скорами
+                for i, rec in enumerate(recommendations):
+                    for ranked in ranked_candidates:
+                        if ranked["id"] == rec["product"]["id"]:
+                            rec["ml_score"] = ranked.get("ml_score", rec["score"])
+                            rec["score"] = ranked.get("ml_score", rec["score"])
+                            break
+
+                # Пересортируем по ML-скорам
+                recommendations.sort(key=lambda x: x["score"], reverse=True)
+                ranking_method = "catboost"
+
+            except Exception as e:
+                print(f"ML ranking failed, fallback to formula: {e}")
+
+        # Ограничиваем до limit
+        recommendations = recommendations[:limit]
+
+        # Обновляем ранки
+        for i, item in enumerate(recommendations):
+            item["rank"] = i + 1
 
         return {
             "product_id": product_id,
@@ -87,6 +127,7 @@ class ProductRecommender:
             "detected_scenario": detected_scenario,
             "recommendations": recommendations,
             "total_count": len(recommendations),
+            "ranking_method": ranking_method,
         }
 
     async def _get_scenario_based_recommendations(

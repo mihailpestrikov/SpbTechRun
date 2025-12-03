@@ -7,6 +7,7 @@ from ..db import get_session, queries
 from ..services.scenarios import scenarios_service
 from ..services.product_recommender import product_recommender
 from ..services.scenario_recommender import scenario_recommender
+from ..ml.catboost_ranker import catboost_ranker
 from .schemas import (
     ProductRecommendationsResponse,
     ScenarioResponse,
@@ -203,3 +204,90 @@ async def get_stats(session: AsyncSession = Depends(get_session)):
         negative_feedback=negative_feedback,
         scenarios_count=len(scenarios_service.scenarios),
     )
+
+
+# ==== ML: CatBoost Ranker ====
+
+@router.post("/ml/train")
+async def train_catboost_model(
+    iterations: int = Query(default=500, ge=100, le=2000),
+    learning_rate: float = Query(default=0.05, ge=0.001, le=0.5),
+    depth: int = Query(default=6, ge=3, le=10),
+    min_feedback_count: int = Query(default=5, ge=1, le=20),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Обучает CatBoost ранкер на исторических данных.
+
+    Требует:
+    - Минимум 100 примеров с фидбеком или заказами
+    - Занимает 1-5 минут в зависимости от размера данных
+
+    Параметры:
+    - iterations: количество итераций boosting (100-2000)
+    - learning_rate: скорость обучения (0.001-0.5)
+    - depth: глубина деревьев (3-10)
+    - min_feedback_count: минимум фидбеков для включения пары (1-20)
+    """
+    try:
+        metadata = await catboost_ranker.train_model(
+            session=session,
+            iterations=iterations,
+            learning_rate=learning_rate,
+            depth=depth,
+            min_feedback_count=min_feedback_count,
+        )
+
+        return {
+            "success": True,
+            "message": "Model trained successfully",
+            "metadata": metadata,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Training failed: {str(e)}"
+        )
+
+
+@router.get("/ml/model-info")
+async def get_model_info():
+    """
+    Возвращает информацию о текущей CatBoost модели.
+
+    Включает:
+    - Статус модели (обучена / не обучена)
+    - Версия модели
+    - Метрики качества
+    - Топ важных признаков
+    """
+    return catboost_ranker.get_model_info()
+
+
+@router.get("/recommendations/{product_id}/with-ml")
+async def get_product_recommendations_with_ml(
+    product_id: int,
+    limit: int = Query(default=20, le=50),
+    use_ml: bool = Query(default=True),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Рекомендации с явным контролем ML-ранжирования.
+
+    Параметры:
+    - use_ml: использовать CatBoost (True) или формульный скоринг (False)
+
+    Возвращает те же рекомендации, но с индикатором метода ранжирования.
+    """
+    result = await product_recommender.get_recommendations(
+        product_id=product_id,
+        session=session,
+        limit=limit,
+        use_ml=use_ml,
+    )
+
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+
+    return result
