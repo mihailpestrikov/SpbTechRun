@@ -190,6 +190,7 @@ export interface GroupProduct {
 export interface GroupRecommendation {
   group_name: string
   is_required: boolean
+  category_ids?: number[]
   products: GroupProduct[]
 }
 

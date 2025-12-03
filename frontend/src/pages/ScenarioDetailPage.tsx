@@ -11,6 +11,7 @@ import {
   Layers,
   PaintBucket,
   AlertCircle,
+  ExternalLink,
 } from 'lucide-react'
 import { PageLayout } from '@/components/layout'
 import { useScenarioRecommendations } from '@/hooks'
@@ -189,7 +190,18 @@ export function ScenarioDetailPage() {
                     </span>
                   )}
                 </div>
-                <span className="text-sm text-gray-500">Выберите подходящий товар</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-500">Выберите подходящий товар</span>
+                  {group.category_ids && group.category_ids.length > 0 && (
+                    <Link
+                      to={`/products?category_id=${group.category_ids[0]}`}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600 hover:text-red-700 transition-colors"
+                    >
+                      Смотреть все
+                      <ExternalLink className="w-4 h-4" />
+                    </Link>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">

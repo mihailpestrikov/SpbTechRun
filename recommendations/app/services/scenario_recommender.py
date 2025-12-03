@@ -18,7 +18,7 @@ class ScenarioRecommender:
         scenario_id: str,
         cart_product_ids: list[int],
         session: AsyncSession,
-        limit_per_group: int = 3,
+        limit_per_group: int = 5,
     ) -> dict:
         """
         Возвращает рекомендации для сценария с учётом корзины.
@@ -55,6 +55,7 @@ class ScenarioRecommender:
                 recommendations.append({
                     "group_name": missing_group["group_name"],
                     "is_required": missing_group["is_required"],
+                    "category_ids": missing_group["category_ids"],
                     "products": group_recs,
                 })
 

@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-Экспорт эмбеддингов из PostgreSQL в JSON файл.
+Экспорт эмбеддингов из PostgreSQL в CSV файл.
 Запуск: python export_embeddings.py
 
 Для импорта на другой машине: python import_embeddings.py
 """
 
-import json
+import csv
 import psycopg2
-import sys
-from datetime import datetime
+import os
 
 DB_CONFIG = {
     "host": "localhost",
@@ -19,7 +18,7 @@ DB_CONFIG = {
     "database": "spbtechrun",
 }
 
-OUTPUT_FILE = "embeddings.json"
+OUTPUT_FILE = "embeddings.csv"
 
 
 def export_embeddings():
@@ -33,34 +32,31 @@ def export_embeddings():
     print(f"Total embeddings to export: {total}")
 
     cursor.execute("""
-        SELECT product_id, embedding, text_representation, created_at
+        SELECT product_id, embedding, text_representation
         FROM product_embeddings
         ORDER BY product_id
     """)
 
-    embeddings = []
-    for row in cursor:
-        product_id, embedding, text_repr, created_at = row
-        embeddings.append({
-            "product_id": product_id,
-            "embedding": embedding,
-            "text_representation": text_repr,
-            "created_at": created_at.isoformat() if created_at else None,
-        })
+    with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["product_id", "embedding", "text_representation"])
+
+        count = 0
+        for row in cursor:
+            product_id, embedding, text_repr = row
+            # Эмбеддинг как строка с разделителем |
+            embedding_str = "|".join(str(x) for x in embedding)
+            writer.writerow([product_id, embedding_str, text_repr or ""])
+            count += 1
+            if count % 1000 == 0:
+                print(f"Progress: {count}/{total}")
 
     cursor.close()
     conn.close()
 
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump({
-            "exported_at": datetime.utcnow().isoformat(),
-            "total_count": len(embeddings),
-            "embedding_dimension": len(embeddings[0]["embedding"]) if embeddings else 0,
-            "embeddings": embeddings,
-        }, f, ensure_ascii=False)
-
-    print(f"Exported {len(embeddings)} embeddings to {OUTPUT_FILE}")
-    print(f"File size: {round(len(open(OUTPUT_FILE).read()) / 1024 / 1024, 2)} MB")
+    file_size = os.path.getsize(OUTPUT_FILE) / 1024 / 1024
+    print(f"Exported {count} embeddings to {OUTPUT_FILE}")
+    print(f"File size: {file_size:.2f} MB")
 
 
 if __name__ == "__main__":

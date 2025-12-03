@@ -401,6 +401,9 @@ pair_feedback_stats (main_product_id, recommended_product_id, positive_count, ne
 -- Фидбек по сценариям
 scenario_feedback (scenario_id, group_name, product_id, feedback_type, user_id)
 scenario_feedback_stats (scenario_id, group_name, product_id, positive_count, negative_count)
+
+-- Статистика совместных покупок (рассчитывается из order_items)
+copurchase_stats (product_id_1, product_id_2, copurchase_count)
 ```
 
 ---
@@ -504,6 +507,19 @@ docker-compose restart recommendations
 ```
 
 Готово! Ollama не нужен — система работает на готовых эмбеддингах.
+
+---
+
+### Обновление статистики совместных покупок
+
+Система использует данные о совместных покупках для улучшения рекомендаций. По мере накопления заказов рекомендуется периодически обновлять статистику:
+
+```bash
+# Пересчёт co-purchase статистики из истории заказов
+docker exec spbtechrun-recommendations-1 python -m app.update_copurchase
+```
+
+Это обновит таблицу `copurchase_stats`, и товары, которые часто покупают вместе, получат boost в ранжировании. Рекомендуется запускать после накопления новых заказов (например, раз в день через cron).
 
 ---
 
