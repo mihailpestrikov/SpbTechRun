@@ -60,7 +60,7 @@
 
 **Решение:** Redis как хранилище сессий и корзины с TTL.
 
-<img src="img/redis-cart.png" width="75%" />
+<img src="img/redis-cart.png" width="575" />
 
 **Merge корзины при авторизации:**
 - Гость добавил 3 товара → залогинился → товары автоматически добавляются к его корзине
@@ -121,7 +121,7 @@ es.Index(product)  // ← Elasticsearch упал, товар не проинде
 
 **Решение:** Outbox Pattern — гарантированная доставка событий через таблицу-очередь.
 
-<img src="img/outbox-pattern.png" width="75%" />
+<img src="img/outbox-pattern.png" width="332" />
 
 **Как работает:**
 1. При создании/обновлении товара **в той же транзакции** пишем событие в `search_outbox`
@@ -240,7 +240,7 @@ score = 0.5 * similarity + 0.3 * same_category + 0.2 * popularity
 
 **Двухуровневая архитектура:**
 
-<img src="img/catboost-ranking.png" width="75%" />
+<img src="img/catboost-ranking.png" width="408" />
 
 **39 признаков в 7 группах:**
 
@@ -361,7 +361,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
 #### Тип 2: По сценарию (карусель на главной)
 
-<img src="img/recommendations-scenario.png" width="75%" />
+<img src="img/recommendations-scenario.png" width="646" />
 
 ### Сценарии ремонта (White Box)
 
