@@ -174,14 +174,14 @@ final_score = semantic_similarity + copurchase_boost - category_penalty
 ## 10. Следующие шаги
 
 ### Высокий приоритет:
-1. Применить миграцию `000003_recommendation_events`
-2. Интегрировать логирование во frontend
-3. Добавить backend handler для логирования
+1. ~~Применить миграцию `000003_recommendation_events`~~ → нужно выполнить в production
+2. ~~Интегрировать логирование во frontend~~ ✅
+3. ~~Добавить backend handler для логирования~~ ✅
 
 ### Средний приоритет:
 4. Добавить `product_stats` для популярности
 5. Добавить `product_reviews` для рейтингов
-6. Переобучить модель с учетом кликов
+6. Переобучить модель с учетом кликов (после сбора данных)
 
 ### Низкий приоритет:
 7. Реализовать TDR-002 для `complementary_score`
