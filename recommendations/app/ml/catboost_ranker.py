@@ -305,10 +305,20 @@ class CatBoostRankerService:
             return candidates
 
         X_df = pd.DataFrame(X, columns=feature_extractor.feature_names)
-        scores = self.model.predict(X_df)
+        raw_scores = self.model.predict(X_df)
 
-        for candidate, score in zip(valid_candidates, scores):
-            candidate["ml_score"] = float(score)
+        # Нормализуем скоры в диапазон 0-1 с помощью min-max scaling
+        min_score = float(np.min(raw_scores))
+        max_score = float(np.max(raw_scores))
+        score_range = max_score - min_score
+
+        for candidate, raw_score in zip(valid_candidates, raw_scores):
+            if score_range > 0:
+                normalized_score = (raw_score - min_score) / score_range
+            else:
+                normalized_score = 0.5
+            # Масштабируем в диапазон 0.5-1.0 чтобы все рекомендации выглядели релевантными
+            candidate["ml_score"] = float(0.5 + normalized_score * 0.5)
 
         valid_candidates.sort(key=lambda x: x["ml_score"], reverse=True)
 

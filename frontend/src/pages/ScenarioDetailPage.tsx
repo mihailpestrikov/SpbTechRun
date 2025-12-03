@@ -275,30 +275,30 @@ export function ScenarioDetailPage() {
                       </button>
 
                       {/* Feedback buttons */}
-                      <div className="flex gap-2 mt-2">
+                      <div className="flex justify-center gap-3 mt-2">
                         <button
                           onClick={() => handleFeedback(product.id, group.group_name, 'positive')}
                           disabled={!!feedback}
-                          className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1 ${
+                          title="Подошёл"
+                          className={`p-2 rounded-lg transition-all ${
                             feedback === 'positive'
                               ? 'bg-green-100 text-green-700'
-                              : 'bg-white border border-gray-200 text-gray-500 hover:border-green-300 hover:text-green-600'
+                              : 'bg-white border border-gray-200 text-gray-400 hover:border-green-300 hover:text-green-600 hover:bg-green-50'
                           } disabled:opacity-60`}
                         >
-                          <ThumbsUp className="w-3 h-3" />
-                          Подошёл
+                          <ThumbsUp className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleFeedback(product.id, group.group_name, 'negative')}
                           disabled={!!feedback}
-                          className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1 ${
+                          title="Не подошёл"
+                          className={`p-2 rounded-lg transition-all ${
                             feedback === 'negative'
                               ? 'bg-red-100 text-red-700'
-                              : 'bg-white border border-gray-200 text-gray-500 hover:border-red-300 hover:text-red-600'
+                              : 'bg-white border border-gray-200 text-gray-400 hover:border-red-300 hover:text-red-600 hover:bg-red-50'
                           } disabled:opacity-60`}
                         >
-                          <ThumbsDown className="w-3 h-3" />
-                          Не подошёл
+                          <ThumbsDown className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
