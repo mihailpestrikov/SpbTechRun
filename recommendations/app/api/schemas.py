@@ -132,3 +132,19 @@ class StatsResponse(BaseModel):
     positive_feedback: int
     negative_feedback: int
     scenarios_count: int
+
+
+class RecommendationEventRequest(BaseModel):
+    """Запрос на логирование события рекомендации"""
+    event_type: str  # impression, click, add_to_cart
+    main_product_id: int
+    recommended_product_id: int
+    recommendation_context: Optional[str] = "product_page"  # product_page, scenario, cart
+    recommendation_rank: Optional[int] = None
+    user_id: Optional[int] = None
+    session_id: Optional[str] = None
+
+
+class RecommendationEventResponse(BaseModel):
+    success: bool
+    events_logged: int

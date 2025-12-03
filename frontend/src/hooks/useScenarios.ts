@@ -33,5 +33,6 @@ export function useAutoScenarioRecommendations(cartProductIds: number[] = []) {
   return useQuery({
     queryKey: ['autoScenarioRecommendations', cartProductIds],
     queryFn: () => getAutoScenarioRecommendations(cartProductIds),
+    placeholderData: (previousData) => previousData,
   })
 }

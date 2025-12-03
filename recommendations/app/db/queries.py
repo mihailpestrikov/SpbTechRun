@@ -7,9 +7,13 @@ async def get_product_by_id(session: AsyncSession, product_id: int) -> Optional[
     result = await session.execute(
         text("""
             SELECT p.id, p.name, p.category_id, p.vendor, p.price, p.picture, p.description,
-                   c.name as category_name
+                   c.name as category_name,
+                   pr.discount_price
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN promos pr ON p.id = pr.product_id
+                AND pr.start_date <= CURRENT_DATE
+                AND pr.end_date >= CURRENT_DATE
             WHERE p.id = :id
         """),
         {"id": product_id}
@@ -26,6 +30,7 @@ async def get_product_by_id(session: AsyncSession, product_id: int) -> Optional[
         "picture": row[5],
         "description": row[6],
         "category_name": row[7],
+        "discount_price": float(row[8]) if row[8] else None,
     }
 
 

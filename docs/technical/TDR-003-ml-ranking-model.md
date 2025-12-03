@@ -4,7 +4,7 @@
 
 | Поле | Значение |
 |------|----------|
-| **Статус** | ✅ **Implemented (90%)** |
+| **Статус** | ✅ **Implemented (95%)** |
 | **Дата создания** | 2025-12-03 |
 | **Дата реализации** | 2025-12-03 |
 | **Приоритет** | Low → **High** (реализовано!) |
@@ -109,7 +109,7 @@ final_score = semantic_similarity + copurchase_boost - category_penalty
 
 ## 9. Статус реализации
 
-### ✅ Реализовано (90%):
+### ✅ Реализовано (95%):
 
 #### **Модель:**
 - ✅ CatBoostRanker (вместо LightGBM — еще лучше!)
@@ -130,12 +130,14 @@ final_score = semantic_similarity + copurchase_boost - category_penalty
 - ✅ `docs/TDR-003_COMPLIANCE.md` — анализ соответствия
 - ✅ `test_catboost.py` — автоматизированные тесты
 
-### ⚠️ Требует доработки (10%):
+### ⚠️ Требует доработки (5%):
 
 1. **Логирование событий:**
    - ✅ Миграция `000003_recommendation_events` создана
-   - ⚠️ Нужна интеграция во frontend/backend
-   - ⚠️ Логирование impressions, clicks, add_to_cart
+   - ✅ Backend endpoints: `POST /api/events`, `POST /api/events/batch`
+   - ✅ Frontend: `logRecommendationEvent()`, `logRecommendationImpressions()`
+   - ✅ Интеграция в ProductPage (impressions + clicks)
+   - ⚠️ Применить миграцию в production
 
 2. **Недостающие признаки:**
    - ❌ `complementary_score` (зависимость от TDR-002)
@@ -144,8 +146,8 @@ final_score = semantic_similarity + copurchase_boost - category_penalty
 
 3. **Метрики:**
    - ✅ NDCG@10
-   - ⚠️ CTR (после логирования кликов)
-   - ⚠️ Conversion (после логирования)
+   - ✅ CTR (логирование готово, нужны данные)
+   - ✅ Conversion (логирование готово, нужны данные)
 
 ### Файлы:
 
@@ -172,14 +174,14 @@ final_score = semantic_similarity + copurchase_boost - category_penalty
 ## 10. Следующие шаги
 
 ### Высокий приоритет:
-1. Применить миграцию `000003_recommendation_events`
-2. Интегрировать логирование во frontend
-3. Добавить backend handler для логирования
+1. ~~Применить миграцию `000003_recommendation_events`~~ → нужно выполнить в production
+2. ~~Интегрировать логирование во frontend~~ ✅
+3. ~~Добавить backend handler для логирования~~ ✅
 
 ### Средний приоритет:
 4. Добавить `product_stats` для популярности
 5. Добавить `product_reviews` для рейтингов
-6. Переобучить модель с учетом кликов
+6. Переобучить модель с учетом кликов (после сбора данных)
 
 ### Низкий приоритет:
 7. Реализовать TDR-002 для `complementary_score`

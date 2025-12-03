@@ -41,27 +41,22 @@ class TrainingDataGenerator:
         print("ГЕНЕРАЦИЯ ОБУЧАЮЩИХ ДАННЫХ ДЛЯ CATBOOST RANKER")
         print("=" * 80)
 
-        # ===== ШАГ 1: Позитивные примеры из фидбека =====
         print("\n[1/5] Извлечение позитивных примеров из фидбека...")
         positive_samples = await self._get_positive_samples_from_feedback(
             session, min_feedback_count
         )
         print(f"  ✓ Найдено {len(positive_samples)} позитивных примеров из фидбека")
 
-        # ===== ШАГ 2: Позитивные примеры из реальных заказов =====
         print("\n[2/5] Извлечение позитивных примеров из заказов...")
         order_samples = await self._get_positive_samples_from_orders(session)
         print(f"  ✓ Найдено {len(order_samples)} позитивных примеров из заказов")
 
-        # Объединяем позитивные примеры
         all_positive = positive_samples + order_samples
         print(f"  ✓ Всего позитивных примеров: {len(all_positive)}")
 
-        # ===== ШАГ 3: Негативные примеры =====
         print("\n[3/5] Генерация негативных примеров...")
         negative_samples = await self._get_negative_samples_from_feedback(session)
 
-        # Добавляем hard negatives (случайные товары)
         hard_negatives = await self._generate_hard_negatives(
             session,
             all_positive,
@@ -73,10 +68,8 @@ class TrainingDataGenerator:
         print(f"  ✓ Hard negatives: {len(hard_negatives)}")
         print(f"  ✓ Всего негативных примеров: {len(all_negative)}")
 
-        # ===== ШАГ 4: Извлечение признаков =====
         print("\n[4/5] Извлечение признаков для всех примеров...")
 
-        # Позитивные
         X_positive = []
         y_positive = []
         groups_positive = []
@@ -85,12 +78,10 @@ class TrainingDataGenerator:
             features = await self._extract_features_for_sample(session, sample)
             if features:
                 X_positive.append(features)
-                y_positive.append(1)  # релевантен
                 groups_positive.append(sample["main_product_id"])
 
         print(f"  ✓ Признаки извлечены для {len(X_positive)}/{len(all_positive)} позитивных")
 
-        # Негативные
         X_negative = []
         y_negative = []
         groups_negative = []
@@ -99,19 +90,16 @@ class TrainingDataGenerator:
             features = await self._extract_features_for_sample(session, sample)
             if features:
                 X_negative.append(features)
-                y_negative.append(0)  # не релевантен
                 groups_negative.append(sample["main_product_id"])
 
         print(f"  ✓ Признаки извлечены для {len(X_negative)}/{len(all_negative)} негативных")
 
-        # ===== ШАГ 5: Формирование датасета =====
         print("\n[5/5] Формирование финального датасета...")
 
         X = X_positive + X_negative
         y = y_positive + y_negative
         groups = groups_positive + groups_negative
 
-        # Конвертируем в pandas
         feature_names = feature_extractor.feature_names
         X_df = pd.DataFrame(X, columns=feature_names)
         y_series = pd.Series(y)
@@ -152,7 +140,6 @@ class TrainingDataGenerator:
             {
                 "main_product_id": row[0],
                 "candidate_product_id": row[1],
-                "weight": row[2],  # можно использовать для weighted training
             }
             for row in rows
         ]
@@ -211,7 +198,6 @@ class TrainingDataGenerator:
 
         samples = []
         for row in rows:
-            # Создаем две пары: A->B и B->A
             samples.append({
                 "main_product_id": row[0],
                 "candidate_product_id": row[1],
@@ -238,16 +224,13 @@ class TrainingDataGenerator:
         if not positive_samples:
             return []
 
-        # Получаем все main_product_id
         main_product_ids = list(set(s["main_product_id"] for s in positive_samples))
 
-        # Получаем все candidate_product_id (чтобы не генерировать позитивные как негативные)
         positive_pairs = set(
             (s["main_product_id"], s["candidate_product_id"])
             for s in positive_samples
         )
 
-        # Берем случайные товары из каталога
         query = text("""
             SELECT id
             FROM products
@@ -259,7 +242,6 @@ class TrainingDataGenerator:
         result = await session.execute(query, {"limit": len(main_product_ids) * ratio * 2})
         random_products = [row[0] for row in result.fetchall()]
 
-        # Генерируем негативные примеры
         negatives = []
         random_idx = 0
 
@@ -269,7 +251,6 @@ class TrainingDataGenerator:
                 candidate_id = random_products[random_idx]
                 random_idx += 1
 
-                # Проверяем что это не позитивная пара
                 if (main_id, candidate_id) not in positive_pairs and main_id != candidate_id:
                     negatives.append({
                         "main_product_id": main_id,
@@ -289,29 +270,23 @@ class TrainingDataGenerator:
             main_id = sample["main_product_id"]
             cand_id = sample["candidate_product_id"]
 
-            # Получаем информацию о товарах
             main_product = await queries.get_product_by_id(session, main_id)
             candidate_product = await queries.get_product_by_id(session, cand_id)
 
             if not main_product or not candidate_product:
                 return None
 
-            # Эмбеддинги
             main_embedding = await queries.get_product_embedding(session, main_id)
             cand_embedding = await queries.get_product_embedding(session, cand_id)
 
-            # Фидбек
             pair_stats = await queries.get_pair_feedback_stats(session, main_id, [cand_id])
             pair_feedback = pair_stats.get(cand_id, {"positive": 0, "negative": 0})
 
-            # Пока не используем scenario_feedback в обучении (можно добавить позже)
             scenario_feedback = {"positive": 0, "negative": 0}
 
-            # Co-purchase
             copurchase_stats = await queries.get_copurchase_stats(session, main_id, [cand_id])
             copurchase_count = copurchase_stats.get(cand_id, 0)
 
-            # Извлекаем признаки
             features = await feature_extractor.extract_features(
                 main_product=main_product,
                 candidate_product=candidate_product,
@@ -320,7 +295,6 @@ class TrainingDataGenerator:
                 pair_feedback=pair_feedback,
                 scenario_feedback=scenario_feedback,
                 copurchase_count=copurchase_count,
-                cart_products=None,  # для обучения не используем контекст корзины
                 session=session,
             )
 

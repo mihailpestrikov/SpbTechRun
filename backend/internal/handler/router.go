@@ -137,6 +137,8 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 		api.GET("/scenarios/:scenario_id", recommendationHandler.GetScenario)
 		api.GET("/scenarios/:scenario_id/recommendations", recommendationHandler.GetScenarioRecommendations)
 		api.POST("/feedback", recommendationHandler.PostFeedback)
+		api.POST("/events", recommendationHandler.PostEvent)
+		api.POST("/events/batch", recommendationHandler.PostEventsBatch)
 		api.GET("/ml/stats", recommendationHandler.GetStats)
 	}
 
