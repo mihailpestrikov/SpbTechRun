@@ -1,6 +1,6 @@
 """
 Feature Extractor для CatBoost Ranker.
-Извлекает 30+ признаков для ранжирования товаров.
+Извлекает 39 признаков для ранжирования товаров.
 """
 
 import numpy as np
@@ -88,9 +88,6 @@ class FeatureExtractor:
     ) -> Dict[str, float]:
         """
         Извлекает все признаки для пары товаров.
-
-        Returns:
-            Dict с 36 признаками
         """
         features = {}
 

@@ -177,7 +177,6 @@ async def log_recommendation_event(
     - click: пользователь кликнул на рекомендацию
     - add_to_cart: пользователь добавил рекомендованный товар в корзину
 
-    Эти данные используются для обучения CatBoost ранкера.
     """
     if request.event_type not in ("impression", "click", "add_to_cart"):
         raise HTTPException(
@@ -220,7 +219,7 @@ async def log_recommendation_events_batch(
     session: AsyncSession = Depends(get_session),
 ):
     """
-    Батчевое логирование событий (для impressions — когда показываем много рекомендаций сразу).
+    Батчевое логирование событий
     """
     if not events:
         return RecommendationEventResponse(success=True, events_logged=0)
@@ -359,11 +358,8 @@ async def get_product_recommendations_with_ml(
 ):
     """
     Рекомендации с явным контролем ML-ранжирования.
-
     Параметры:
     - use_ml: использовать CatBoost (True) или формульный скоринг (False)
-
-    Возвращает те же рекомендации, но с индикатором метода ранжирования.
     """
     result = await product_recommender.get_recommendations(
         product_id=product_id,

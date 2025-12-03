@@ -28,18 +28,7 @@ class TrainingDataGenerator:
     ) -> Tuple[pd.DataFrame, pd.Series, List[int]]:
         """
         Генерирует обучающие данные.
-
-        Args:
-            session: DB сессия
-            min_feedback_count: минимум фидбеков для включения пары
-            negative_sampling_ratio: сколько негативных примеров на 1 позитивный
-
-        Returns:
-            (X_train, y_train, group_ids) для CatBoostRanker
         """
-        print("=" * 80)
-        print("ГЕНЕРАЦИЯ ОБУЧАЮЩИХ ДАННЫХ ДЛЯ CATBOOST RANKER")
-        print("=" * 80)
 
         print("\n[1/5] Извлечение позитивных примеров из фидбека...")
         positive_samples = await self._get_positive_samples_from_feedback(
@@ -109,10 +98,6 @@ class TrainingDataGenerator:
         print(f"  ✓ Негативных: {len(y) - sum(y)} ({(len(y)-sum(y))/len(y)*100:.1f}%)")
         print(f"  ✓ Уникальных query (main_product_id): {len(set(groups))}")
         print(f"  ✓ Признаков: {len(feature_names)}")
-
-        print("\n" + "=" * 80)
-        print("ГЕНЕРАЦИЯ ЗАВЕРШЕНА")
-        print("=" * 80)
 
         return X_df, y_series, groups
 
