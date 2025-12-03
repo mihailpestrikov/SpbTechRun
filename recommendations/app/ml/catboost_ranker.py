@@ -36,7 +36,6 @@ class CatBoostRankerService:
         self.model_version: Optional[str] = None
         self.model_metadata: Optional[Dict] = None
 
-        # Загружаем последнюю модель при инициализации
         self._load_latest_model()
 
     def _load_latest_model(self):
@@ -47,7 +46,6 @@ class CatBoostRankerService:
             print("Нет обученных моделей. Используется формульный скоринг.")
             return
 
-        # Берем последнюю по времени
         latest_model = max(model_files, key=lambda p: p.stat().st_mtime)
 
         try:
@@ -56,7 +54,6 @@ class CatBoostRankerService:
 
             self.model_version = latest_model.stem.replace("catboost_ranker_", "")
 
-            # Загружаем метаданные
             metadata_file = latest_model.parent / f"{latest_model.stem}_metadata.json"
             if metadata_file.exists():
                 with open(metadata_file, "r") as f:
@@ -99,7 +96,6 @@ class CatBoostRankerService:
         print("ОБУЧЕНИЕ CATBOOST RANKER")
         print("=" * 80)
 
-        # ===== ШАГ 1: Генерация данных =====
         X_train, y_train, groups = await training_data_generator.generate_training_data(
             session=session,
             min_feedback_count=min_feedback_count,
@@ -112,10 +108,8 @@ class CatBoostRankerService:
                 "Нужно минимум 100. Соберите больше фидбека или заказов."
             )
 
-        # ===== ШАГ 2: Split на train/validation =====
         from sklearn.model_selection import train_test_split
 
-        # Группируем по query_id для корректного split
         unique_groups = list(set(groups))
         train_groups, val_groups = train_test_split(
             unique_groups, test_size=0.2, random_state=42
@@ -124,18 +118,28 @@ class CatBoostRankerService:
         train_mask = [g in train_groups for g in groups]
         val_mask = [g in val_groups for g in groups]
 
-        X_train_split = X_train[train_mask]
-        y_train_split = y_train[train_mask]
+        X_train_split = X_train[train_mask].reset_index(drop=True)
+        y_train_split = y_train[train_mask].reset_index(drop=True)
         groups_train_split = [groups[i] for i, m in enumerate(train_mask) if m]
 
-        X_val = X_train[val_mask]
-        y_val = y_train[val_mask]
+        X_val = X_train[val_mask].reset_index(drop=True)
+        y_val = y_train[val_mask].reset_index(drop=True)
         groups_val = [groups[i] for i, m in enumerate(val_mask) if m]
+
+        # CatBoost требует чтобы данные были отсортированы по group_id
+        train_order = np.argsort(groups_train_split)
+        X_train_split = X_train_split.iloc[train_order].reset_index(drop=True)
+        y_train_split = y_train_split.iloc[train_order].reset_index(drop=True)
+        groups_train_split = [groups_train_split[i] for i in train_order]
+
+        val_order = np.argsort(groups_val)
+        X_val = X_val.iloc[val_order].reset_index(drop=True)
+        y_val = y_val.iloc[val_order].reset_index(drop=True)
+        groups_val = [groups_val[i] for i in val_order]
 
         print(f"\nTrain: {len(X_train_split)} примеров, {len(train_groups)} query")
         print(f"Val:   {len(X_val)} примеров, {len(val_groups)} query")
 
-        # ===== ШАГ 3: Создание Pool для CatBoost =====
         train_pool = Pool(
             data=X_train_split,
             label=y_train_split,
@@ -148,7 +152,6 @@ class CatBoostRankerService:
             group_id=groups_val,
         )
 
-        # ===== ШАГ 4: Обучение модели =====
         print("\n" + "-" * 80)
         print("ЗАПУСК ОБУЧЕНИЯ")
         print("-" * 80)
@@ -157,10 +160,10 @@ class CatBoostRankerService:
             iterations=iterations,
             learning_rate=learning_rate,
             depth=depth,
-            loss_function="YetiRank",  # ranking loss для пар документов
+            loss_function="YetiRank",
             custom_metric=["NDCG:top=10", "PrecisionAt:top=5"],
             random_seed=42,
-            verbose=50,  # вывод каждые 50 итераций
+            verbose=50,
             use_best_model=True,
             eval_metric="NDCG:top=10",
         )
@@ -171,7 +174,6 @@ class CatBoostRankerService:
             plot=False,
         )
 
-        # ===== ШАГ 5: Оценка качества =====
         print("\n" + "-" * 80)
         print("ОЦЕНКА КАЧЕСТВА")
         print("-" * 80)
@@ -179,7 +181,6 @@ class CatBoostRankerService:
         train_predictions = self.model.predict(train_pool)
         val_predictions = self.model.predict(val_pool)
 
-        # Метрики
         from sklearn.metrics import roc_auc_score, average_precision_score
 
         train_auc = roc_auc_score(y_train_split, train_predictions)
@@ -193,12 +194,11 @@ class CatBoostRankerService:
         print(f"Train AP:  {train_ap:.4f}")
         print(f"Val AP:    {val_ap:.4f}")
 
-        # ===== ШАГ 6: Feature Importance =====
         print("\n" + "-" * 80)
         print("TOP-10 ВАЖНЫХ ПРИЗНАКОВ")
         print("-" * 80)
 
-        feature_importance = self.model.get_feature_importance()
+        feature_importance = self.model.get_feature_importance(data=train_pool)
         feature_names = X_train.columns
 
         importance_df = pd.DataFrame({
@@ -208,13 +208,11 @@ class CatBoostRankerService:
 
         print(importance_df.head(10).to_string(index=False))
 
-        # ===== ШАГ 7: Сохранение модели =====
         self.model_version = datetime.now().strftime("%Y%m%d_%H%M%S")
         model_path = self.models_dir / f"catboost_ranker_{self.model_version}.cbm"
 
         self.model.save_model(str(model_path))
 
-        # Сохраняем метаданные
         self.model_metadata = {
             "version": self.model_version,
             "trained_at": datetime.now().isoformat(),
@@ -270,10 +268,8 @@ class CatBoostRankerService:
             Отсортированный список кандидатов с ML-скорами
         """
         if not self.model or not candidates:
-            # Фолбэк на формульный скоринг
             return candidates
 
-        # Извлекаем признаки для всех кандидатов
         X = []
         valid_candidates = []
 
@@ -282,7 +278,6 @@ class CatBoostRankerService:
 
         candidate_ids = [c["id"] for c in candidates]
 
-        # Батчевые запросы для эффективности
         embeddings_map = await queries.get_embeddings_map(session, candidate_ids)
         pair_stats = await queries.get_pair_feedback_stats(session, main_id, candidate_ids)
         copurchase_stats = await queries.get_copurchase_stats(session, main_id, candidate_ids)
@@ -309,15 +304,22 @@ class CatBoostRankerService:
         if not X:
             return candidates
 
-        # Предсказание скоров
         X_df = pd.DataFrame(X, columns=feature_extractor.feature_names)
-        scores = self.model.predict(X_df)
+        raw_scores = self.model.predict(X_df)
 
-        # Добавляем скоры к кандидатам
-        for candidate, score in zip(valid_candidates, scores):
-            candidate["ml_score"] = float(score)
+        # Нормализуем скоры в диапазон 0-1 с помощью min-max scaling
+        min_score = float(np.min(raw_scores))
+        max_score = float(np.max(raw_scores))
+        score_range = max_score - min_score
 
-        # Сортируем по ML-скору
+        for candidate, raw_score in zip(valid_candidates, raw_scores):
+            if score_range > 0:
+                normalized_score = (raw_score - min_score) / score_range
+            else:
+                normalized_score = 0.5
+            # Масштабируем в диапазон 0.5-1.0 чтобы все рекомендации выглядели релевантными
+            candidate["ml_score"] = float(0.5 + normalized_score * 0.5)
+
         valid_candidates.sort(key=lambda x: x["ml_score"], reverse=True)
 
         return valid_candidates

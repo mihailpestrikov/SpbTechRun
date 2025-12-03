@@ -21,10 +21,10 @@ class FeatureExtractor:
     3. Ценовые - 7 признаков
     4. Категорийные - 5 признаков
     5. Co-purchase - 3 признака
-    6. Популярность - 4 признака
+    6. Популярность - 7 признаков (view_count, cart_add_count, order_count)
     7. Контекстные (корзина) - 3 признака
 
-    Итого: 36 признаков
+    Итого: 39 признаков
     """
 
     def __init__(self):
@@ -33,14 +33,12 @@ class FeatureExtractor:
     def _get_feature_names(self) -> List[str]:
         """Возвращает список всех признаков в правильном порядке"""
         return [
-            # Семантические (6)
             "embedding_cosine_similarity",
             "embedding_l2_distance",
             "embedding_dot_product",
             "embedding_euclidean_distance",
             "embedding_manhattan_distance",
             "embedding_has_valid",
-            # Фидбек (8)
             "pair_feedback_positive",
             "pair_feedback_negative",
             "pair_feedback_total",
@@ -49,7 +47,6 @@ class FeatureExtractor:
             "scenario_feedback_negative",
             "scenario_feedback_total",
             "scenario_feedback_approval_rate",
-            # Ценовые (7)
             "candidate_price",
             "price_ratio",
             "price_diff",
@@ -57,22 +54,21 @@ class FeatureExtractor:
             "has_discount",
             "discount_percent",
             "discount_amount",
-            # Категорийные (5)
             "same_category",
             "same_root_category",
             "category_distance",
             "same_vendor",
             "different_vendor",
-            # Co-purchase (3)
             "copurchase_count",
             "copurchase_log",
             "copurchase_exists",
-            # Популярность (4)
             "has_image",
             "is_discounted",
             "price_bucket",
             "name_length",
-            # Контекст корзины (3)
+            "view_count",
+            "cart_add_count",
+            "order_count",
             "cart_similarity_max",
             "cart_similarity_avg",
             "cart_products_count",
@@ -98,37 +94,30 @@ class FeatureExtractor:
         """
         features = {}
 
-        # ===== ГРУППА 1: СЕМАНТИЧЕСКИЕ ПРИЗНАКИ (6 признаков) =====
         features.update(self._extract_semantic_features(
             main_embedding, candidate_embedding
         ))
 
-        # ===== ГРУППА 2: ФИДБЕК (8 признаков) =====
         features.update(self._extract_feedback_features(
             pair_feedback, scenario_feedback
         ))
 
-        # ===== ГРУППА 3: ЦЕНОВЫЕ (7 признаков) =====
         features.update(self._extract_price_features(
             main_product, candidate_product
         ))
 
-        # ===== ГРУППА 4: КАТЕГОРИЙНЫЕ (5 признаков) =====
         features.update(await self._extract_category_features(
             main_product, candidate_product, session
         ))
 
-        # ===== ГРУППА 5: CO-PURCHASE (3 признака) =====
         features.update(self._extract_copurchase_features(
             copurchase_count
         ))
 
-        # ===== ГРУППА 6: ПОПУЛЯРНОСТЬ (4 признака) =====
         features.update(self._extract_popularity_features(
             candidate_product
         ))
 
-        # ===== ГРУППА 7: КОНТЕКСТНЫЕ (корзина) (3 признака) =====
         if cart_products and session:
             features.update(await self._extract_cart_context_features(
                 candidate_product, cart_products, session
@@ -159,7 +148,6 @@ class FeatureExtractor:
         main_vec = np.array(main_embedding, dtype=np.float32)
         candidate_vec = np.array(candidate_embedding, dtype=np.float32)
 
-        # Нормализуем для корректного cosine
         main_norm = main_vec / (np.linalg.norm(main_vec) + 1e-8)
         cand_norm = candidate_vec / (np.linalg.norm(candidate_vec) + 1e-8)
 
@@ -184,14 +172,12 @@ class FeatureExtractor:
         scenario_feedback: Dict,
     ) -> Dict[str, float]:
         """Признаки на основе фидбека пользователей"""
-        # Пары товаров
         pair_positive = pair_feedback.get("positive", 0)
         pair_negative = pair_feedback.get("negative", 0)
         pair_total = pair_positive + pair_negative
 
-        pair_approval = (pair_positive + 1) / (pair_total + 2)  # Bayesian smoothing
+        pair_approval = (pair_positive + 1) / (pair_total + 2)
 
-        # Сценарий
         scenario_positive = scenario_feedback.get("positive", 0)
         scenario_negative = scenario_feedback.get("negative", 0)
         scenario_total = scenario_positive + scenario_negative
@@ -219,12 +205,10 @@ class FeatureExtractor:
         cand_price = candidate_product.get("price", 0)
         cand_discount = candidate_product.get("discount_price")
 
-        # Отношение цен
         price_ratio = cand_price / max(main_price, 1)
         price_diff = cand_price - main_price
         price_diff_percent = (price_diff / max(main_price, 1)) * 100
 
-        # Скидка
         has_discount = 1.0 if cand_discount else 0.0
         discount_percent = 0.0
         discount_amount = 0.0
@@ -255,9 +239,8 @@ class FeatureExtractor:
 
         same_category = 1.0 if main_cat == cand_cat else 0.0
 
-        # Root категории
         same_root = 0.0
-        category_distance = 3.0  # максимальное расстояние
+        category_distance = 3.0
 
         if session:
             main_root = await queries.get_root_category_id(session, main_cat)
@@ -265,10 +248,8 @@ class FeatureExtractor:
 
             if main_root and cand_root:
                 same_root = 1.0 if main_root == cand_root else 0.0
-                # Эвристика: если root совпадает - расстояние меньше
                 category_distance = 0.0 if same_root else 2.0
 
-        # Бренды
         main_vendor = main_product.get("vendor", "")
         cand_vendor = candidate_product.get("vendor", "")
         same_vendor = 1.0 if main_vendor and cand_vendor and main_vendor == cand_vendor else 0.0
@@ -300,24 +281,25 @@ class FeatureExtractor:
         has_image = 1.0 if candidate_product.get("picture") else 0.0
         has_discount = 1.0 if candidate_product.get("discount_price") else 0.0
 
-        # Эвристика: дешевые товары популярнее?
         price = candidate_product.get("price", 0)
-        price_bucket = 0  # 0: low, 1: medium, 2: high
+        price_bucket = 0
         if price > 10000:
             price_bucket = 2
         elif price > 1000:
             price_bucket = 1
 
-        # TODO TDR-003: Добавить реальную популярность
-        # - product_view_count (из таблицы product_views)
-        # - product_order_count (из таблицы order_items)
-        # - product_rating (из таблицы product_ratings, если будет)
+        view_count = candidate_product.get("view_count", 0)
+        cart_add_count = candidate_product.get("cart_add_count", 0)
+        order_count = candidate_product.get("order_count", 0)
 
         return {
             "has_image": has_image,
             "is_discounted": has_discount,
             "price_bucket": float(price_bucket),
             "name_length": float(len(candidate_product.get("name", ""))),
+            "view_count": np.log1p(view_count),
+            "cart_add_count": np.log1p(cart_add_count),
+            "order_count": np.log1p(order_count),
         }
 
     async def _extract_cart_context_features(
@@ -334,11 +316,9 @@ class FeatureExtractor:
                 "cart_products_count": 0,
             }
 
-        # Получаем эмбеддинги товаров из корзины
         cart_ids = [p["id"] for p in cart_products]
         cart_embeddings_map = await queries.get_embeddings_map(session, cart_ids)
 
-        # Эмбеддинг кандидата
         cand_embedding = await queries.get_product_embedding(session, candidate_product["id"])
 
         if not cand_embedding or not cart_embeddings_map:

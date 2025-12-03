@@ -96,3 +96,16 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.ProductToResponse(product))
 }
+
+func (h *ProductHandler) TrackView(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid product id"})
+		return
+	}
+
+	// Fire and forget - не блокируем ответ
+	go h.repo.IncrementViewCount(c.Request.Context(), id)
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}

@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Package, ShoppingCart, Check, Sparkles, ArrowRight } from 'lucide-react'
-import { useAutoScenarioRecommendations } from '@/hooks'
+import { Package, ShoppingCart, Check, Sparkles, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useScenarios, useScenarioRecommendations } from '@/hooks'
 import { useCartStore } from '@/store'
 import { capitalize } from '@/lib/utils'
 import type { GroupProduct } from '@/types'
@@ -11,8 +11,29 @@ interface CarouselProps {
 }
 
 export function ScenarioCarousel({ cartProductIds }: CarouselProps) {
-  const { data, isLoading } = useAutoScenarioRecommendations(cartProductIds)
+  const { data: scenarios, isLoading: scenariosLoading } = useScenarios()
+  const [currentScenarioIndex, setCurrentScenarioIndex] = useState(0)
+
+  const currentScenarioId = scenarios?.[currentScenarioIndex]?.id || ''
+  const { data, isLoading: recommendationsLoading } = useScenarioRecommendations(currentScenarioId, cartProductIds)
+
   const { items: cartItems, addItem, isProductLoading } = useCartStore()
+
+  const isLoading = scenariosLoading || recommendationsLoading
+
+  // Переключение на следующий сценарий
+  const nextScenario = () => {
+    if (scenarios && scenarios.length > 0) {
+      setCurrentScenarioIndex((prev) => (prev + 1) % scenarios.length)
+    }
+  }
+
+  // Переключение на предыдущий сценарий
+  const prevScenario = () => {
+    if (scenarios && scenarios.length > 0) {
+      setCurrentScenarioIndex((prev) => (prev - 1 + scenarios.length) % scenarios.length)
+    }
+  }
 
   // Собираем все товары из рекомендаций в единый список
   const allProducts = useMemo(() => {
@@ -75,11 +96,48 @@ export function ScenarioCarousel({ cartProductIds }: CarouselProps) {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
+          {/* Стрелка влево */}
+          <button
+            onClick={prevScenario}
+            className="p-1.5 rounded-full bg-white/80 hover:bg-white text-gray-600 hover:text-red-600 transition-all shadow-sm hover:shadow"
+            aria-label="Предыдущий сценарий"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-red-500" />
             <h2 className="font-semibold text-gray-900">{data.scenario.name}</h2>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+
+          {/* Стрелка вправо */}
+          <button
+            onClick={nextScenario}
+            className="p-1.5 rounded-full bg-white/80 hover:bg-white text-gray-600 hover:text-red-600 transition-all shadow-sm hover:shadow"
+            aria-label="Следующий сценарий"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+
+          {/* Индикатор сценариев */}
+          {scenarios && scenarios.length > 1 && (
+            <div className="flex items-center gap-1 ml-2">
+              {scenarios.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentScenarioIndex(index)}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    index === currentScenarioIndex
+                      ? 'bg-red-500 w-4'
+                      : 'bg-gray-300 hover:bg-gray-400'
+                  }`}
+                  aria-label={`Сценарий ${index + 1}`}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-sm text-gray-500 ml-2">
             <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-red-500 to-rose-500 rounded-full transition-all"
@@ -114,7 +172,7 @@ export function ScenarioCarousel({ cartProductIds }: CarouselProps) {
               to={`/product/${product.id}`}
               className="group w-48 flex-shrink-0 bg-white rounded-xl p-4 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-100"
             >
-              <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-50 mb-3">
+              <div className="relative aspect-square rounded-lg overflow-hidden bg-white mb-3">
                 {hasDiscount && (
                   <div className="absolute top-2 left-2 z-10 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold px-2 py-1 rounded">
                     -{Math.round((1 - product.discount_price! / product.price) * 100)}%

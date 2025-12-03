@@ -53,6 +53,8 @@ services:
       - POSTGRES_DB=spbtechrun
       - OLLAMA_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=nomic-embed-text
+    volumes:
+      - ml_models:/app/models
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,3 +88,4 @@ services:
 volumes:
   postgres_data:
   elasticsearch_data:
+  ml_models:

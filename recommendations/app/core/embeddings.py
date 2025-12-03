@@ -1,8 +1,11 @@
+import logging
 import httpx
 import numpy as np
 from typing import Optional
 
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -43,7 +46,7 @@ class OllamaEmbeddings:
 
     async def generate(self, text: str) -> Optional[list[float]]:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     self.url,
                     json={"model": self.model, "prompt": text},
@@ -52,13 +55,12 @@ class OllamaEmbeddings:
                     data = response.json()
                     return data.get("embedding")
                 return None
+        except httpx.TimeoutException:
+            logger.warning(f"Embedding timeout for text: {text[:50]}...")
+            return None
         except Exception as e:
-            print(f"Embedding error: {e}")
+            logger.error(f"Embedding error: {e}")
             return None
 
     async def generate_batch(self, texts: list[str]) -> list[Optional[list[float]]]:
-        results = []
-        for text in texts:
-            emb = await self.generate(text)
-            results.append(emb)
-        return results
+        return [await self.generate(text) for text in texts]

@@ -41,12 +41,16 @@ async def get_products_by_ids(session: AsyncSession, product_ids: list[int]) -> 
         text("""
             SELECT p.id, p.name, p.category_id, p.vendor, p.price, p.picture,
                    c.name as category_name,
-                   pr.discount_price
+                   pr.discount_price,
+                   COALESCE(ps.view_count, 0) as view_count,
+                   COALESCE(ps.cart_add_count, 0) as cart_add_count,
+                   COALESCE(ps.order_count, 0) as order_count
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN promos pr ON p.id = pr.product_id
                 AND pr.start_date <= CURRENT_DATE
                 AND pr.end_date >= CURRENT_DATE
+            LEFT JOIN product_stats ps ON p.id = ps.product_id
             WHERE p.id = ANY(:ids)
         """),
         {"ids": product_ids}
@@ -62,6 +66,9 @@ async def get_products_by_ids(session: AsyncSession, product_ids: list[int]) -> 
             "picture": row[5],
             "category_name": row[6],
             "discount_price": float(row[7]) if row[7] else None,
+            "view_count": row[8],
+            "cart_add_count": row[9],
+            "order_count": row[10],
         }
     return products
 
@@ -77,12 +84,16 @@ async def get_products_by_categories(
         text("""
             SELECT p.id, p.name, p.category_id, p.vendor, p.price, p.picture,
                    c.name as category_name,
-                   pr.discount_price
+                   pr.discount_price,
+                   COALESCE(ps.view_count, 0) as view_count,
+                   COALESCE(ps.cart_add_count, 0) as cart_add_count,
+                   COALESCE(ps.order_count, 0) as order_count
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN promos pr ON p.id = pr.product_id
                 AND pr.start_date <= CURRENT_DATE
                 AND pr.end_date >= CURRENT_DATE
+            LEFT JOIN product_stats ps ON p.id = ps.product_id
             WHERE p.category_id = ANY(:cat_ids)
               AND p.id != ALL(:exclude)
               AND p.available = true
@@ -101,6 +112,9 @@ async def get_products_by_categories(
             "picture": row[5],
             "category_name": row[6],
             "discount_price": float(row[7]) if row[7] else None,
+            "view_count": row[8],
+            "cart_add_count": row[9],
+            "order_count": row[10],
         }
         for row in result.fetchall()
     ]

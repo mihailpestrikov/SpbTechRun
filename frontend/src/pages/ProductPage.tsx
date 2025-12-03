@@ -7,6 +7,7 @@ import { useProduct, useRecommendations, useFeedback, useCategories } from '@/ho
 import { useCartStore } from '@/store'
 import { capitalize } from '@/lib/utils'
 import { logRecommendationEvent, logRecommendationImpressions } from '@/api/recommendations'
+import { trackProductView } from '@/api/products'
 import type { Category } from '@/types'
 
 function ProductSkeleton() {
@@ -48,6 +49,12 @@ export function ProductPage() {
   useEffect(() => {
     fetchCart()
   }, [fetchCart])
+
+  useEffect(() => {
+    if (productId) {
+      trackProductView(productId)
+    }
+  }, [productId])
 
   const categoryPath = useMemo(() => {
     if (!product || !categories) return []

@@ -261,38 +261,30 @@ export function HomePage() {
                         const isChecked = selectedVendors.includes(v.name)
                         const count = vendorCounts.get(v.name) ?? 0
                         return (
-                          <label
+                          <button
                             key={v.name}
-                            className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg transition-colors ${
+                            type="button"
+                            onClick={() => {
+                              if (isChecked) {
+                                setSelectedVendors(selectedVendors.filter(x => x !== v.name))
+                              } else {
+                                setSelectedVendors([...selectedVendors, v.name])
+                              }
+                            }}
+                            className={`flex items-center gap-2 w-full text-left py-2 px-2 rounded-lg ${
                               isChecked ? 'bg-red-50' : 'hover:bg-gray-50'
                             }`}
                           >
-                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                              isChecked
-                                ? 'bg-red-500 border-red-500'
-                                : 'border-gray-300 hover:border-gray-400'
+                            <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                              isChecked ? 'border-red-500 bg-red-500' : 'border-gray-300'
                             }`}>
-                              {isChecked && <Check className="w-3 h-3 text-white" />}
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedVendors([...selectedVendors, v.name])
-                                } else {
-                                  setSelectedVendors(selectedVendors.filter(x => x !== v.name))
-                                }
-                              }}
-                              className="sr-only"
-                            />
-                            <span className={`text-sm flex-1 truncate ${isChecked ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
-                              {v.name}
+                              {isChecked && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                             </span>
-                            <span className={`text-xs ${isChecked ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
+                            <span className={`text-sm flex-1 truncate ${isChecked ? 'font-medium text-gray-900' : 'text-gray-700'}`}>{v.name}</span>
+                            <span className={`text-xs ${isChecked ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
                               {count}
                             </span>
-                          </label>
+                          </button>
                         )
                       })}
                     </div>

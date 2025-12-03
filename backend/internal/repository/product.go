@@ -362,3 +362,41 @@ func (r *ProductRepository) DeleteTx(ctx context.Context, q Querier, id int) err
 	_, err = q.ExecContext(ctx, query, args...)
 	return err
 }
+
+func (r *ProductRepository) IncrementViewCount(ctx context.Context, productID int) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO product_stats (product_id, view_count)
+		VALUES ($1, 1)
+		ON CONFLICT (product_id)
+		DO UPDATE SET view_count = product_stats.view_count + 1, updated_at = NOW()
+	`, productID)
+	return err
+}
+
+func (r *ProductRepository) IncrementCartAddCount(ctx context.Context, productID int) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO product_stats (product_id, cart_add_count)
+		VALUES ($1, 1)
+		ON CONFLICT (product_id)
+		DO UPDATE SET cart_add_count = product_stats.cart_add_count + 1, updated_at = NOW()
+	`, productID)
+	return err
+}
+
+func (r *ProductRepository) IncrementOrderCount(ctx context.Context, productIDs []int) error {
+	if len(productIDs) == 0 {
+		return nil
+	}
+	for _, id := range productIDs {
+		_, err := r.db.ExecContext(ctx, `
+			INSERT INTO product_stats (product_id, order_count)
+			VALUES ($1, 1)
+			ON CONFLICT (product_id)
+			DO UPDATE SET order_count = product_stats.order_count + 1, updated_at = NOW()
+		`, id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

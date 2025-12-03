@@ -174,6 +174,7 @@ func (s *CartService) AddItem(ctx context.Context, userID *int, sessionID *strin
 		if err := s.cartCache.AddGuestItem(ctx, *sessionID, productID, quantity); err != nil {
 			return nil, err
 		}
+		go s.productRepo.IncrementCartAddCount(ctx, productID)
 		return &model.CartItem{
 			ProductID: productID,
 			Quantity:  quantity,
@@ -200,6 +201,7 @@ func (s *CartService) AddItem(ctx context.Context, userID *int, sessionID *strin
 			if err != nil {
 				return nil, err
 			}
+			go s.productRepo.IncrementCartAddCount(ctx, productID)
 		}
 
 		_ = s.cartCache.InvalidateUserCart(ctx, *userID)

@@ -1,33 +1,65 @@
-"""
-Сценарии White Box ремонта.
-Каждый сценарий содержит группы категорий товаров, необходимых для этапа.
-"""
-
+import logging
 from dataclasses import dataclass, field
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ScenarioGroup:
+    """Группа товаров в сценарии с явно заданными ID категорий"""
     name: str
-    category_patterns: list[str]  # Паттерны для поиска категорий
-    category_ids: list[int] = field(default_factory=list)  # Конкретные ID (заполняются при инициализации)
+    category_ids: list[int]
     is_required: bool = True
     sort_order: int = 0
-    # Ограничение по root-категориям (если указано - ищем только в этих)
-    root_category_ids: Optional[list[int]] = None
 
 
-# Root-категории для строительства/ремонта
-ROOT_CONSTRUCTION = [
-    25361,  # Краска и малярный инструмент
-    23882,  # Строительные материалы
-    23549,  # Ручной инструмент
-    30639,  # Электроинструмент
-    30640,  # Строительное оборудование
-    25260,  # Напольные покрытия
-    24016,  # Товары для дома и декора
-]
+CATEGORY_IDS = {
+    # Общие
+    "buckets": [25252],
+    "film": [30227],
+    "mixers": [29165],
+    "levels": [23708],
+    "primers": [25380],
+    "insulation": [25191],
+
+    # Наливной пол
+    "floor_mixes": [25185],
+    "rollers": [30808],
+    "waterproofing": [25186],
+
+    # Перегородки
+    "gas_blocks": [25229],
+    "drywall": [25165],
+    "mounting_adhesive": [25201],
+
+    # Стены
+    "putty": [25179, 30462],
+    "plaster": [25178],
+    "rules": [23705],
+    "spatulas": [30226],
+    "mesh_tape": [30229],
+
+    # Укладка плитки
+    "floor_tile": [27647],
+    "wall_tile": [25340],
+    "tile_adhesive": [25357],
+    "tile_grout": [25358],
+    "tile_leveling": [28500],
+    "tile_crosses": [34844],
+    "tile_corners": [25342],
+    "sealants": [25197],
+
+    # Электромонтаж
+    "cable": [25026],
+    "conduit": [25007],
+    "sockets": [24994],
+    "switches": [24988],
+    "socket_frames": [24997],
+    "circuit_breakers": [25047],
+    "electrical_tape": [28723],
+    "cable_ties": [30194],
+}
 
 
 @dataclass
@@ -47,60 +79,52 @@ SCENARIOS: dict[str, Scenario] = {
         image="/images/scenarios/floor.jpg",
         groups=[
             ScenarioGroup(
-                name="Основа",
-                category_patterns=["ровнител", "наливн", "смес для пол", "выравнива"],
+                name="Смеси для выравнивания полов",
+                category_ids=CATEGORY_IDS["floor_mixes"],
                 is_required=True,
                 sort_order=1,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Грунты",
-                category_patterns=["грунтовк", "грунты по", "грунты аэроз", "бетонконтакт", "гидроизоляц полов"],
+                name="Грунтовки",
+                category_ids=CATEGORY_IDS["primers"],
                 is_required=True,
                 sort_order=2,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Ёмкости",
-                category_patterns=["ведра для краски", "ведра прямоугольн", "ведра круглы"],
+                name="Ёмкости строительные",
+                category_ids=CATEGORY_IDS["buckets"],
                 is_required=True,
                 sort_order=3,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Валики",
-                category_patterns=["валик игольч", "валик"],
+                name="Валики игольчатые",
+                category_ids=CATEGORY_IDS["rollers"],
                 is_required=True,
                 sort_order=4,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Миксер",
-                category_patterns=["миксер строит", "строительн миксер", "насадки для миксер", "миксеры аккумулятор"],
+                name="Насадки для миксеров",
+                category_ids=CATEGORY_IDS["mixers"],
                 is_required=True,
                 sort_order=5,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Уровни",
-                category_patterns=["уровни пузырьков", "гидроуровн"],
+                name="Уровни пузырьковые",
+                category_ids=CATEGORY_IDS["levels"],
                 is_required=False,
                 sort_order=6,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Плёнка",
-                category_patterns=["пленка защитн", "пленка техническ", "пленки защитн"],
+                name="Плёнки защитные",
+                category_ids=CATEGORY_IDS["film"],
                 is_required=False,
                 sort_order=7,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Шумоизоляция",
-                category_patterns=["теплозвукоизоляц", "панели теплозвук", "изоляция для труб"],
+                name="Теплозвукоизоляция",
+                category_ids=CATEGORY_IDS["insulation"],
                 is_required=False,
                 sort_order=8,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
         ],
     ),
@@ -111,46 +135,46 @@ SCENARIOS: dict[str, Scenario] = {
         image="/images/scenarios/partitions.jpg",
         groups=[
             ScenarioGroup(
-                name="Основа",
-                category_patterns=["газоблок", "газобетон", "гипсокартон", "гкл", "пгп"],
+                name="Газобетонные блоки",
+                category_ids=CATEGORY_IDS["gas_blocks"],
                 is_required=True,
                 sort_order=1,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Клей",
-                category_patterns=["клей для газоблок", "клей для гкл", "клей монтаж", "раствор кладоч"],
+                name="Гипсокартон",
+                category_ids=CATEGORY_IDS["drywall"],
                 is_required=True,
                 sort_order=2,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Грунты",
-                category_patterns=["грунтовк", "грунты по", "грунты аэроз", "бетонконтакт"],
+                name="Клей монтажный",
+                category_ids=CATEGORY_IDS["mounting_adhesive"],
                 is_required=True,
                 sort_order=3,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Шпатлёвка",
-                category_patterns=["шпатлевки сухие", "шпатлевки готов", "шпатлевки полимер"],
+                name="Грунтовки",
+                category_ids=CATEGORY_IDS["primers"],
                 is_required=True,
                 sort_order=4,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Ёмкости",
-                category_patterns=["ведра для краски", "ведра прямоугольн", "ведра круглы"],
+                name="Шпатлёвки",
+                category_ids=CATEGORY_IDS["putty"],
                 is_required=True,
                 sort_order=5,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Миксер",
-                category_patterns=["миксер строит", "строительн миксер", "насадки для миксер", "миксеры аккумулятор"],
+                name="Ёмкости строительные",
+                category_ids=CATEGORY_IDS["buckets"],
                 is_required=True,
                 sort_order=6,
-                root_category_ids=ROOT_CONSTRUCTION,
+            ),
+            ScenarioGroup(
+                name="Насадки для миксеров",
+                category_ids=CATEGORY_IDS["mixers"],
+                is_required=True,
+                sort_order=7,
             ),
         ],
     ),
@@ -161,67 +185,176 @@ SCENARIOS: dict[str, Scenario] = {
         image="/images/scenarios/walls.jpg",
         groups=[
             ScenarioGroup(
-                name="Основа",
-                category_patterns=["штукатурка гипс", "штукатурка цемент", "штукатурка декор"],
+                name="Штукатурка гипсовая",
+                category_ids=CATEGORY_IDS["plaster"],
                 is_required=True,
                 sort_order=1,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Грунты",
-                category_patterns=["грунтовк", "грунты по", "грунты аэроз", "бетонконтакт"],
+                name="Грунтовки",
+                category_ids=CATEGORY_IDS["primers"],
                 is_required=True,
                 sort_order=2,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Шпатлёвка",
-                category_patterns=["шпатлевки сухие", "шпатлевки готов", "шпатлевки полимер"],
+                name="Шпатлёвки",
+                category_ids=CATEGORY_IDS["putty"],
                 is_required=True,
                 sort_order=3,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Ёмкости",
-                category_patterns=["ведра для краски", "ведра прямоугольн", "ведра круглы"],
+                name="Ёмкости строительные",
+                category_ids=CATEGORY_IDS["buckets"],
                 is_required=True,
                 sort_order=4,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
                 name="Правила",
-                category_patterns=["правила"],
+                category_ids=CATEGORY_IDS["rules"],
                 is_required=True,
                 sort_order=5,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
                 name="Шпатели",
-                category_patterns=["шпател"],
+                category_ids=CATEGORY_IDS["spatulas"],
                 is_required=True,
                 sort_order=6,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Миксер",
-                category_patterns=["миксер строит", "строительн миксер", "насадки для миксер", "миксеры аккумулятор"],
+                name="Насадки для миксеров",
+                category_ids=CATEGORY_IDS["mixers"],
                 is_required=True,
                 sort_order=7,
-                root_category_ids=ROOT_CONSTRUCTION,
             ),
             ScenarioGroup(
-                name="Армирование",
-                category_patterns=["сетки малярн", "серпянк", "сетки армирующ", "сетки штукатурн"],
+                name="Сетки малярные, серпянка",
+                category_ids=CATEGORY_IDS["mesh_tape"],
                 is_required=False,
                 sort_order=8,
-                root_category_ids=ROOT_CONSTRUCTION,
+            ),
+        ],
+    ),
+    "tiling": Scenario(
+        id="tiling",
+        name="Укладка плитки",
+        description="Плитка, клеевые смеси, затирки и инструменты для укладки",
+        image="/images/scenarios/tiling.jpg",
+        groups=[
+            ScenarioGroup(
+                name="Керамогранит напольный",
+                category_ids=CATEGORY_IDS["floor_tile"],
+                is_required=True,
+                sort_order=1,
             ),
             ScenarioGroup(
-                name="Лента",
-                category_patterns=["лент%маляр"],
+                name="Плитка настенная",
+                category_ids=CATEGORY_IDS["wall_tile"],
+                is_required=True,
+                sort_order=2,
+            ),
+            ScenarioGroup(
+                name="Клей для плитки",
+                category_ids=CATEGORY_IDS["tile_adhesive"],
+                is_required=True,
+                sort_order=3,
+            ),
+            ScenarioGroup(
+                name="Затирки для плитки",
+                category_ids=CATEGORY_IDS["tile_grout"],
+                is_required=True,
+                sort_order=4,
+            ),
+            ScenarioGroup(
+                name="Грунтовки",
+                category_ids=CATEGORY_IDS["primers"],
+                is_required=True,
+                sort_order=5,
+            ),
+            ScenarioGroup(
+                name="Системы выравнивания плитки",
+                category_ids=CATEGORY_IDS["tile_leveling"],
+                is_required=True,
+                sort_order=6,
+            ),
+            ScenarioGroup(
+                name="Крестики для плитки",
+                category_ids=CATEGORY_IDS["tile_crosses"],
+                is_required=True,
+                sort_order=7,
+            ),
+            ScenarioGroup(
+                name="Уголки и бордюры для плитки",
+                category_ids=CATEGORY_IDS["tile_corners"],
+                is_required=False,
+                sort_order=8,
+            ),
+            ScenarioGroup(
+                name="Герметики",
+                category_ids=CATEGORY_IDS["sealants"],
                 is_required=False,
                 sort_order=9,
-                root_category_ids=ROOT_CONSTRUCTION,
+            ),
+            ScenarioGroup(
+                name="Ёмкости строительные",
+                category_ids=CATEGORY_IDS["buckets"],
+                is_required=False,
+                sort_order=10,
+            ),
+        ],
+    ),
+    "electrical": Scenario(
+        id="electrical",
+        name="Электромонтаж",
+        description="Кабели, розетки, выключатели и материалы для электропроводки",
+        image="/images/scenarios/electrical.jpg",
+        groups=[
+            ScenarioGroup(
+                name="Кабель электрический",
+                category_ids=CATEGORY_IDS["cable"],
+                is_required=True,
+                sort_order=1,
+            ),
+            ScenarioGroup(
+                name="Трубы гофрированные",
+                category_ids=CATEGORY_IDS["conduit"],
+                is_required=True,
+                sort_order=2,
+            ),
+            ScenarioGroup(
+                name="Розетки встраиваемые",
+                category_ids=CATEGORY_IDS["sockets"],
+                is_required=True,
+                sort_order=3,
+            ),
+            ScenarioGroup(
+                name="Выключатели встраиваемые",
+                category_ids=CATEGORY_IDS["switches"],
+                is_required=True,
+                sort_order=4,
+            ),
+            ScenarioGroup(
+                name="Рамки для розеток и выключателей",
+                category_ids=CATEGORY_IDS["socket_frames"],
+                is_required=True,
+                sort_order=5,
+            ),
+            ScenarioGroup(
+                name="Автоматы защиты",
+                category_ids=CATEGORY_IDS["circuit_breakers"],
+                is_required=True,
+                sort_order=6,
+            ),
+            ScenarioGroup(
+                name="Изолента",
+                category_ids=CATEGORY_IDS["electrical_tape"],
+                is_required=True,
+                sort_order=7,
+            ),
+            ScenarioGroup(
+                name="Стяжки кабельные",
+                category_ids=CATEGORY_IDS["cable_ties"],
+                is_required=False,
+                sort_order=8,
             ),
         ],
     ),
@@ -231,54 +364,12 @@ SCENARIOS: dict[str, Scenario] = {
 class ScenariosService:
     def __init__(self):
         self.scenarios = SCENARIOS
-        self._initialized = False
 
     async def initialize(self, session):
-        """Загружает ID категорий по паттернам из БД с фильтрацией по root-категориям"""
-        if self._initialized:
-            return
-
-        from sqlalchemy import text
-
+        """Категории уже заданы явно в CATEGORY_IDS, инициализация не требуется"""
         for scenario in self.scenarios.values():
             for group in scenario.groups:
-                all_ids = set()
-                for pattern in group.category_patterns:
-                    # Если указаны root_category_ids - фильтруем по ним
-                    if group.root_category_ids:
-                        result = await session.execute(
-                            text("""
-                                WITH RECURSIVE cat_tree AS (
-                                    -- Базовый случай: root-категории
-                                    SELECT id, parent_id
-                                    FROM categories
-                                    WHERE id = ANY(:root_ids)
-                                    UNION ALL
-                                    -- Рекурсивно добавляем всех потомков
-                                    SELECT c.id, c.parent_id
-                                    FROM categories c
-                                    JOIN cat_tree ct ON c.parent_id = ct.id
-                                )
-                                SELECT c.id FROM categories c
-                                JOIN cat_tree ct ON c.id = ct.id
-                                WHERE LOWER(c.name) LIKE LOWER(:pattern)
-                            """),
-                            {"pattern": f"%{pattern}%", "root_ids": group.root_category_ids}
-                        )
-                    else:
-                        result = await session.execute(
-                            text("""
-                                SELECT id FROM categories
-                                WHERE LOWER(name) LIKE LOWER(:pattern)
-                            """),
-                            {"pattern": f"%{pattern}%"}
-                        )
-                    ids = [row[0] for row in result.fetchall()]
-                    all_ids.update(ids)
-                group.category_ids = list(all_ids)
-                print(f"  {scenario.id}/{group.name}: {len(group.category_ids)} categories")
-
-        self._initialized = True
+                logger.info(f"{scenario.id}/{group.name}: {len(group.category_ids)} categories")
 
     def get_all_scenarios(self) -> list[dict]:
         return [
@@ -342,7 +433,6 @@ class ScenariosService:
                 if group.is_required:
                     total_required += 1
 
-                # Есть ли в корзине товар из категорий этой группы?
                 group_satisfied = any(
                     cat_id in group.category_ids
                     for cat_id in cart_category_ids

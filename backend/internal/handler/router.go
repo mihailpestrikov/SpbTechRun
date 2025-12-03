@@ -102,6 +102,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 
 		api.GET("/products", productHandler.GetProducts)
 		api.GET("/products/:id", productHandler.GetProduct)
+		api.POST("/products/:id/view", productHandler.TrackView)
 
 		api.GET("/categories", categoryHandler.GetCategories)
 		api.GET("/categories/:id", categoryHandler.GetCategory)

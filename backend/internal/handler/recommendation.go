@@ -50,7 +50,7 @@ func (h *RecommendationHandler) GetScenario(c *gin.Context) {
 func (h *RecommendationHandler) GetScenarioRecommendations(c *gin.Context) {
 	scenarioID := c.Param("scenario_id")
 	cartProductIDs := c.Query("cart_product_ids")
-	limitPerGroup := c.DefaultQuery("limit_per_group", "6")
+	limitPerGroup := c.DefaultQuery("limit_per_group", "10")
 
 	url := fmt.Sprintf("%s/scenarios/%s/recommendations?cart_product_ids=%s&limit_per_group=%s",
 		h.mlURL, scenarioID, cartProductIDs, limitPerGroup)
