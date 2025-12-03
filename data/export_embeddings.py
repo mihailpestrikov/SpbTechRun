@@ -18,7 +18,7 @@ DB_CONFIG = {
     "database": "spbtechrun",
 }
 
-OUTPUT_FILE = "embeddings.csv"
+OUTPUT_FILE = "data/embeddings.csv"
 
 
 def export_embeddings():

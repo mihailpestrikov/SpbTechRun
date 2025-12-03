@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Package, ShoppingCart, Check, Sparkles, ArrowRight } from 'lucide-react'
 import { useAutoScenarioRecommendations } from '@/hooks'
@@ -13,8 +13,6 @@ interface CarouselProps {
 export function ScenarioCarousel({ cartProductIds }: CarouselProps) {
   const { data, isLoading } = useAutoScenarioRecommendations(cartProductIds)
   const { items: cartItems, addItem, isProductLoading } = useCartStore()
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [isPaused, setIsPaused] = useState(false)
 
   // Собираем все товары из рекомендаций в единый список
   const allProducts = useMemo(() => {
@@ -27,42 +25,6 @@ export function ScenarioCarousel({ cartProductIds }: CarouselProps) {
     }
     return products
   }, [data])
-
-  // Дублируем для бесконечной прокрутки
-  const duplicatedProducts = useMemo(() => {
-    if (allProducts.length === 0) return []
-    // Дублируем 3 раза для плавного цикла
-    return [...allProducts, ...allProducts, ...allProducts]
-  }, [allProducts])
-
-  // Автопрокрутка
-  useEffect(() => {
-    if (!scrollRef.current || isPaused || duplicatedProducts.length === 0) return
-
-    const container = scrollRef.current
-    let animationId: number
-    let scrollSpeed = 0.5
-
-    const scroll = () => {
-      if (container && !isPaused) {
-        container.scrollLeft += scrollSpeed
-
-        // Когда дошли до конца первой копии, прыгаем в начало второй
-        const singleSetWidth = container.scrollWidth / 3
-        if (container.scrollLeft >= singleSetWidth * 2) {
-          container.scrollLeft = singleSetWidth
-        }
-      }
-      animationId = requestAnimationFrame(scroll)
-    }
-
-    // Начинаем с середины (вторая копия)
-    container.scrollLeft = container.scrollWidth / 3
-
-    animationId = requestAnimationFrame(scroll)
-
-    return () => cancelAnimationFrame(animationId)
-  }, [isPaused, duplicatedProducts.length])
 
   const handleAddToCart = (productId: number, e: React.MouseEvent) => {
     e.preventDefault()
@@ -138,14 +100,9 @@ export function ScenarioCarousel({ cartProductIds }: CarouselProps) {
 
       <p className="text-gray-600 text-sm mb-4">Для завершения сценария вам понадобится:</p>
 
-      {/* Carousel */}
-      <div
-        ref={scrollRef}
-        className="flex gap-4 overflow-x-hidden"
-        onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
-      >
-        {duplicatedProducts.map((product, idx) => {
+      {/* Horizontal scroll */}
+      <div className="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+        {allProducts.map((product) => {
           const inCart = isInCart(product.id)
           const loading = isProductLoading(product.id)
           const hasDiscount = product.discount_price && product.discount_price < product.price
@@ -153,7 +110,7 @@ export function ScenarioCarousel({ cartProductIds }: CarouselProps) {
 
           return (
             <Link
-              key={`${product.id}-${idx}`}
+              key={product.id}
               to={`/product/${product.id}`}
               className="group w-48 flex-shrink-0 bg-white rounded-xl p-4 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-100"
             >

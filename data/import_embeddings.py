@@ -17,7 +17,7 @@ DB_CONFIG = {
     "database": "spbtechrun",
 }
 
-INPUT_FILE = "embeddings.csv"
+INPUT_FILE = "data/embeddings.csv"
 
 
 def import_embeddings():

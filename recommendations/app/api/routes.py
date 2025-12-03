@@ -70,7 +70,7 @@ async def get_scenario(scenario_id: str):
 async def get_scenario_recommendations(
     scenario_id: str,
     cart_product_ids: str = Query(default="", description="Comma-separated product IDs in cart"),
-    limit_per_group: int = Query(default=3, le=10),
+    limit_per_group: int = Query(default=6, le=10),
     session: AsyncSession = Depends(get_session),
 ):
     """

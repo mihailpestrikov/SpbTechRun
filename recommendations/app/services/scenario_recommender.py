@@ -18,7 +18,7 @@ class ScenarioRecommender:
         scenario_id: str,
         cart_product_ids: list[int],
         session: AsyncSession,
-        limit_per_group: int = 5,
+        limit_per_group: int = 6,
     ) -> dict:
         """
         Возвращает рекомендации для сценария с учётом корзины.

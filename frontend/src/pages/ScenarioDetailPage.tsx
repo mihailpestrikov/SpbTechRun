@@ -194,7 +194,7 @@ export function ScenarioDetailPage() {
                   <span className="text-sm text-gray-500">Выберите подходящий товар</span>
                   {group.category_ids && group.category_ids.length > 0 && (
                     <Link
-                      to={`/products?category_id=${group.category_ids[0]}`}
+                      to={`/?category=${group.category_ids[0]}`}
                       className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600 hover:text-red-700 transition-colors"
                     >
                       Смотреть все
@@ -204,7 +204,7 @@ export function ScenarioDetailPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              <div className="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                 {group.products.map(product => {
                   const inCart = isInCart(product.id)
                   const loading = isProductLoading(product.id)
@@ -215,7 +215,7 @@ export function ScenarioDetailPage() {
                   return (
                     <div
                       key={product.id}
-                      className={`group bg-gray-50 rounded-xl p-4 transition-all duration-300 border-2 ${
+                      className={`group flex-shrink-0 w-48 bg-gray-50 rounded-xl p-4 transition-all duration-300 border-2 ${
                         inCart ? 'border-green-300 bg-green-50' : 'border-transparent hover:bg-white hover:shadow-lg hover:-translate-y-1'
                       }`}
                     >
