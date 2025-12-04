@@ -260,7 +260,7 @@ model = CatBoostRanker(
     iterations=500,
     learning_rate=0.05,
     depth=6,
-    loss_function="YetiRank",  # Pairwise ranking loss
+    loss_function="YetiRank",
     eval_metric="NDCG:top=10",
 )
 
@@ -289,7 +289,7 @@ model.fit(X_train, y_train, group_id=groups)
 
 #### TanStack Query: Управление серверным состоянием
 
-**Проблема:** Управление данными с сервера в React — боль:
+**Проблема:** Управление данными с сервера в React сложно:
 - Дублирование запросов: 3 компонента запрашивают одни данные = 3 запроса
 - Кэширование: когда инвалидировать? Как синхронизировать между вкладками?
 - Loading/Error состояния: в каждом компоненте писать `if (loading) return <Spinner />`
