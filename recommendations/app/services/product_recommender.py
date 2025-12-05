@@ -265,20 +265,42 @@ class ProductRecommender:
             final_score = base_score + copurchase_boost - category_penalty
 
             match_reasons = []
+
+            # Категория товара
+            if cproduct.get("category_name"):
+                match_reasons.append({
+                    "type": "category",
+                    "text": f"Категория: {cproduct['category_name']}",
+                })
+
+            # Совместные покупки
             if copurchase_count > 0:
                 match_reasons.append({
                     "type": "copurchase",
                     "text": f"Покупают вместе: {copurchase_count}x",
                 })
+
+            # Семантическая схожесть
             match_reasons.append({
                 "type": "semantic",
-                "text": f"Схожесть: {base_score:.0%}",
+                "text": f"Семантика: {base_score:.0%}",
             })
+
+            # Из другой корневой категории
             if category_penalty > 0:
                 match_reasons.append({
                     "type": "category_cross",
                     "text": "Из смежной категории",
                 })
+
+            # Скидка
+            if cproduct.get("discount_price") and cproduct.get("price"):
+                discount_pct = int((1 - cproduct["discount_price"] / cproduct["price"]) * 100)
+                if discount_pct > 0:
+                    match_reasons.append({
+                        "type": "discount",
+                        "text": f"Скидка {discount_pct}%",
+                    })
 
             scored_candidates.append({
                 "product": {
@@ -367,7 +389,7 @@ class ProductRecommender:
             if similarity > 0.5:
                 reasons.append({
                     "type": "semantic",
-                    "text": f"Схожесть: {similarity:.0%}",
+                    "text": f"Семантика: {similarity:.0%}",
                 })
 
         if candidate.get("discount_price") and candidate.get("price"):

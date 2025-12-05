@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import DOMPurify from 'dompurify'
-import { ChevronRight, Minus, Plus, ShoppingCart, Check, ThumbsUp, ThumbsDown, Package, Sparkles } from 'lucide-react'
+import { ChevronRight, Minus, Plus, ShoppingCart, Check, ThumbsUp, ThumbsDown, Package, Sparkles, Info } from 'lucide-react'
 import { PageLayout } from '@/components/layout'
 import { useProduct, useRecommendations, useFeedback, useCategories } from '@/hooks'
 import { useCartStore } from '@/store'
@@ -344,7 +344,7 @@ export function ProductPage() {
                       </div>
 
                       {rec.match_reasons && rec.match_reasons.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1 items-center">
                           {rec.match_reasons.slice(0, 2).map((mr, idx) => (
                             <span
                               key={idx}
@@ -352,12 +352,43 @@ export function ProductPage() {
                                 mr.type === 'category' ? 'bg-blue-50 text-blue-600' :
                                 mr.type === 'feedback' ? 'bg-green-50 text-green-600' :
                                 mr.type === 'semantic' ? 'bg-purple-50 text-purple-600' :
+                                mr.type === 'copurchase' ? 'bg-amber-50 text-amber-600' :
+                                mr.type === 'discount' ? 'bg-red-50 text-red-600' :
                                 'bg-gray-100 text-gray-600'
                               }`}
                             >
                               {mr.text}
                             </span>
                           ))}
+                          {rec.match_reasons.length > 2 && (
+                            <div className="relative group/tooltip">
+                              <button className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors flex items-center gap-0.5">
+                                <Info className="w-3 h-3" />
+                                +{rec.match_reasons.length - 2}
+                              </button>
+                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover/tooltip:block z-50">
+                                <div className="bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl min-w-[200px] max-w-[280px]">
+                                  <div className="font-medium mb-2 text-gray-300">Почему рекомендуем:</div>
+                                  <ul className="space-y-1.5">
+                                    {rec.match_reasons.map((mr, idx) => (
+                                      <li key={idx} className="flex items-start gap-2">
+                                        <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${
+                                          mr.type === 'category' ? 'bg-blue-400' :
+                                          mr.type === 'feedback' ? 'bg-green-400' :
+                                          mr.type === 'semantic' ? 'bg-purple-400' :
+                                          mr.type === 'copurchase' ? 'bg-amber-400' :
+                                          mr.type === 'discount' ? 'bg-red-400' :
+                                          'bg-gray-400'
+                                        }`} />
+                                        <span>{mr.text}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 rotate-45" />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
