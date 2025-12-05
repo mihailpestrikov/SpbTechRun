@@ -1,10 +1,121 @@
 # SpbTechRun: Интеллектуальная система рекомендаций сопутствующих товаров
 
+## Быстрый старт
+
+### Требования
+
+- Docker и Docker Compose
+- 8+ GB RAM
+- Python 3.10+ (для скриптов загрузки данных)
+- Ollama (только для генерации эмбеддингов с нуля)
+
+### Шаг 1: Скачивание данных
+
+Скачайте датасеты и эмбеддинги с Google Drive:
+
+**[Датасеты и эмбеддинги (Google Drive)](https://drive.google.com/drive/folders/1raoqlnlr_Equ8GGNeZUcAkfdRVh4iHx3?usp=sharing)**
+
+Содержимое папки на Google Drive:
+- `categories.csv` — категории товаров
+- `offers_expanded.csv` — товары (~60k записей)
+- `promos.csv` — акции и скидки
+- `embeddings.csv` — готовые эмбеддинги товаров (768-мерные векторы)
+
+### Шаг 2: Размещение файлов
+
+Положите скачанные файлы в папку `data/data/`:
+
+```
+SpbTechRun/
+└── data/
+    └── data/
+        ├── categories.csv
+        ├── offers_expanded.csv
+        ├── promos.csv
+        └── embeddings.csv    # опционально, если не хотите генерировать
+```
+
+### Шаг 3: Запуск с готовыми эмбеддингами
+
+```bash
+# 1. Запуск всех сервисов
+docker-compose up -d
+
+# 2. Установка зависимостей и загрузка данных в PostgreSQL
+cd data && pip install -r requirements.txt && python load_data.py
+
+# 3. Импорт эмбеддингов
+python import_embeddings.py && cd ..
+
+# 4. Генерация синтетического фидбека для холодного старта
+docker exec spbtechrun-recommendations-1 python -m app.generate_synthetic_feedback
+
+# 5. Обучение CatBoost
+curl -X POST "http://localhost:8000/ml/train?iterations=500"
+
+# 6. Перезапуск ML-сервиса для загрузки эмбеддингов и модели
+docker-compose restart recommendations
+```
+
+### Шаг 4 (альтернатива): Генерация эмбеддингов с нуля
+
+Если вы хотите сгенерировать эмбеддинги самостоятельно:
+
+```bash
+# 1. Установка Ollama (Mac)
+brew install ollama && ollama serve  # в отдельном терминале
+ollama pull nomic-embed-text
+
+# 2. Запуск сервисов
+docker-compose up -d
+
+# 3. Загрузка данных
+cd data && pip install -r requirements.txt && python load_data.py && cd ..
+
+# 4. Генерация эмбеддингов (~60 минут)
+docker exec -it spbtechrun-recommendations-1 python -m app.generate_embeddings
+
+# 5. Генерация синтетического фидбека для холодного старта
+docker exec spbtechrun-recommendations-1 python -m app.generate_synthetic_feedback
+
+# 6. Обучение CatBoost
+curl -X POST "http://localhost:8000/ml/train?iterations=500"
+
+# 7. Перезапуск ML-сервиса для загрузки эмбеддингов и модели
+docker-compose restart recommendations
+```
+
+### Доступ к сервисам
+
+| Сервис | URL |
+|--------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8080/api |
+| ML API | http://localhost:8000 |
+| Elasticsearch | http://localhost:9200 |
+
+### Переобучение CatBoost
+
+CatBoost рекомендуется переобучать по мере накопления фидбека и заказов:
+
+```bash
+# Переобучение модели (занимает ~1-2 минуты)
+curl -X POST "http://localhost:8000/ml/train?iterations=500"
+
+# Проверка статуса модели
+curl "http://localhost:8000/ml/model-info"
+```
+
+**Когда переобучать:**
+- После накопления 100+ новых оценок фидбека
+- После значительного роста заказов (co-purchase данные)
+- Раз в неделю при активном использовании
+
+---
+
 ## О проекте
 
 **SpbTechRun** — полнофункциональная система рекомендаций товаров для розничной сети строительных материалов МАКСИДОМ. Система решает задачу автоматического подбора сопутствующих товаров для этапа ремонта "White Box" (черновая отделка): наливные полы, выравнивание стен, монтаж перегородок.
-
-**[Датасеты и эмбеддинги (Google Drive)](https://drive.google.com/drive/folders/1raoqlnlr_Equ8GGNeZUcAkfdRVh4iHx3?usp=sharing)**
 
 ### Бизнес-задача
 
@@ -534,87 +645,6 @@ search_outbox (id, entity_type, entity_id, operation, payload JSONB, processed, 
 | POST | `/events` | Логирование событий |
 | POST | `/ml/train` | Обучить CatBoost |
 | GET | `/ml/model-info` | Статус модели |
-
----
-
-## Запуск проекта
-
-### Требования
-
-- Docker и Docker Compose
-- 8+ GB RAM
-- Ollama (только для генерации эмбеддингов)
-
-### Быстрый старт (с готовыми эмбеддингами)
-
-```bash
-# 1. Запуск всех сервисов
-docker-compose up -d
-
-# 2. Загрузка данных и эмбеддингов
-cd data && pip install -r requirements.txt && python load_data.py
-
-# 3. Импорт эмбеддингов (скачать с Google Drive)
-python import_embeddings.py
-
-# 4. Перезапуск ML-сервиса для загрузки эмбеддингов в FAISS
-docker-compose restart recommendations
-
-# 5. Обучение CatBoost (опционально, улучшает качество)
-curl -X POST "http://localhost:8000/ml/train?iterations=500"
-```
-
-### Полный запуск (генерация эмбеддингов с нуля)
-
-```bash
-# 1. Установка Ollama (Mac)
-brew install ollama && ollama serve  # в отдельном терминале
-ollama pull nomic-embed-text
-
-# 2. Запуск сервисов
-docker-compose up -d
-
-# 3. Загрузка данных
-cd data && pip install -r requirements.txt && python load_data.py
-
-# 4. Генерация эмбеддингов (~10-30 минут)
-docker exec -it spbtechrun-recommendations-1 python -m app.generate_embeddings
-
-# 5. Генерация синтетического фидбека для холодного старта
-docker exec spbtechrun-recommendations-1 python -m app.generate_synthetic_feedback
-
-# 6. Обучение CatBoost
-curl -X POST "http://localhost:8000/ml/train?iterations=500"
-
-# 7. Перезапуск ML-сервиса
-docker-compose restart recommendations
-```
-
-### Переобучение CatBoost
-
-CatBoost рекомендуется переобучать по мере накопления фидбека и заказов:
-
-```bash
-# Переобучение модели (занимает ~1-2 минуты)
-curl -X POST "http://localhost:8000/ml/train?iterations=500"
-
-# Проверка статуса модели
-curl "http://localhost:8000/ml/model-info"
-```
-
-**Когда переобучать:**
-- После накопления 100+ новых оценок фидбека
-- После значительного роста заказов (co-purchase данные)
-- Раз в неделю при активном использовании
-
-### Доступ к сервисам
-
-| Сервис | URL |
-|--------|-----|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8080/api |
-| ML API | http://localhost:8000 |
-| Elasticsearch | http://localhost:9200 |
 
 ---
 
