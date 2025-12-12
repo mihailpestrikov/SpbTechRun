@@ -50,11 +50,17 @@ python import_embeddings.py && cd ..
 # 4. Генерация синтетического фидбека для холодного старта
 docker exec spbtechrun-recommendations-1 python -m app.generate_synthetic_feedback
 
-# 5. Обучение CatBoost
+# 5. Обучение модели комплементарности категорий
+docker exec spbtechrun-recommendations-1 python -m app.train_complementarity
+
+# 6. Обучение CatBoost с признаками комплементарности
 curl -X POST "http://localhost:8000/ml/train?iterations=500"
 
-# 6. Перезапуск ML-сервиса для загрузки эмбеддингов и модели
+# 7. Перезапуск ML-сервиса для загрузки моделей
 docker-compose restart recommendations
+
+# 8. Проверка работы
+curl "http://localhost:8000/complementary-categories/25185?top_k=5"
 ```
 
 ### Шаг 4 (альтернатива): Генерация эмбеддингов с нуля
@@ -78,11 +84,17 @@ docker exec -it spbtechrun-recommendations-1 python -m app.generate_embeddings
 # 5. Генерация синтетического фидбека для холодного старта
 docker exec spbtechrun-recommendations-1 python -m app.generate_synthetic_feedback
 
-# 6. Обучение CatBoost
+# 6. Обучение модели комплементарности категорий
+docker exec spbtechrun-recommendations-1 python -m app.train_complementarity
+
+# 7. Обучение CatBoost с признаками комплементарности
 curl -X POST "http://localhost:8000/ml/train?iterations=500"
 
-# 7. Перезапуск ML-сервиса для загрузки эмбеддингов и модели
+# 8. Перезапуск ML-сервиса для загрузки моделей
 docker-compose restart recommendations
+
+# 9. Проверка работы
+curl "http://localhost:8000/complementary-categories/25185?top_k=5"
 ```
 
 ### Доступ к сервисам
@@ -378,7 +390,7 @@ score = 0.5 * similarity + 0.3 * same_category + 0.2 * popularity
 - Не учитывает нелинейные зависимости (например: скидка важна только для дорогих товаров)
 - Не адаптируется к данным — нужно вручную перенастраивать
 
-**Почему не нейросеть:** Для 39 табличных признаков градиентный бустинг работает лучше. Нейросети хороши для изображений/текста, но для structured data CatBoost/XGBoost — SOTA.
+**Почему не нейросеть:** Для 44 табличных признаков градиентный бустинг работает лучше. Нейросети хороши для изображений/текста, но для structured data CatBoost/XGBoost — SOTA.
 
 **Решение:** CatBoost Ranker — градиентный бустинг для learning-to-rank, автоматически находит оптимальные веса и нелинейные зависимости.
 
@@ -386,7 +398,7 @@ score = 0.5 * similarity + 0.3 * same_category + 0.2 * popularity
 
 <img src="img/catboost-ranking.png" width="408" />
 
-**39 признаков в 7 группах:**
+**44 признака в 8 группах:**
 
 | Группа | Признаки | Описание |
 |--------|----------|----------|
@@ -397,6 +409,11 @@ score = 0.5 * similarity + 0.3 * same_category + 0.2 * popularity
 | **Co-purchase (3)** | copurchase_count, copurchase_log, copurchase_exists | Совместные покупки |
 | **Популярность (7)** | has_image, is_discounted, price_bucket, name_length, view_count, cart_add_count, order_count | Метрики товара |
 | **Контекст корзины (3)** | cart_similarity_max, cart_similarity_avg, cart_products_count | Связь с корзиной |
+| **Комплементарность (5)** | complementarity_score, category_semantic_similarity, scenario_category_match, copurchase_category_count, categories_in_same_scenario | ML-модель связей между категориями |
+
+**Модель комплементарности категорий:**
+
+Для улучшения cross-category рекомендаций (например: штукатурка → шпатели, плитка → клей) внедрена отдельная LogisticRegression модель, обученная на 300+ размеченных парах категорий. Модель вычисляет эмбеддинги категорий (среднее эмбеддингов товаров) и предсказывает вероятность комплементарности. 5 новых признаков включают скор модели, семантическое сходство категорий, связь через сценарии и агрегированные co-purchase на уровне категорий. Это позволяет CatBoost ранжировать товары из других категорий выше, если они комплементарны основному товару.
 
 **Обучение:**
 ```python
