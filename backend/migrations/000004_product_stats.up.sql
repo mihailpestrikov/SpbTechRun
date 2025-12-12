@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS product_stats (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_product_stats_popularity ON product_stats(view_count, order_count);
+CREATE INDEX IF NOT EXISTS idx_product_stats_popularity ON product_stats(view_count, order_count);
 
 INSERT INTO product_stats (product_id)
 SELECT id FROM products

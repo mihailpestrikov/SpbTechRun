@@ -7,6 +7,8 @@ from ..db import get_session, queries
 from ..services.scenarios import scenarios_service
 from ..services.product_recommender import product_recommender
 from ..services.scenario_recommender import scenario_recommender
+from ..services.category_embeddings import category_embeddings_service
+from ..services.complementarity_model import complementarity_model
 from ..ml.catboost_ranker import catboost_ranker
 from .schemas import (
     ProductRecommendationsResponse,
@@ -329,6 +331,9 @@ async def train_catboost_model(
         }
 
     except Exception as e:
+        import traceback
+        print(f"Training error: {type(e).__name__}: {e}")
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Training failed: {str(e)}"
@@ -372,3 +377,70 @@ async def get_product_recommendations_with_ml(
         raise HTTPException(status_code=404, detail=result["error"])
 
     return result
+
+
+@router.get("/complementary-categories/{category_id}")
+async def get_complementary_categories(
+    category_id: int,
+    top_k: int = Query(default=10, le=50),
+    min_score: float = Query(default=0.5, ge=0.0, le=1.0),
+):
+    """
+    Возвращает топ-K комплементарных категорий для заданной категории.
+
+    Параметры:
+    - category_id: ID категории
+    - top_k: количество результатов (max 50)
+    - min_score: минимальный скор комплементарности (0-1)
+
+    Возвращает:
+    - category_id: ID исходной категории
+    - category_name: название исходной категории
+    - complementary: список комплементарных категорий с скорами и типами связи
+    """
+    category_name = category_embeddings_service.get_category_name(category_id)
+
+    if not category_name:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Category {category_id} not found or has no embeddings"
+        )
+
+    complementary = complementarity_model.get_complementary_categories(
+        category_id=category_id,
+        top_k=top_k,
+        min_score=min_score
+    )
+
+    return {
+        "category_id": category_id,
+        "category_name": category_name,
+        "complementary": [
+            {
+                "category_id": cat_id,
+                "name": cat_name,
+                "score": round(score, 3),
+                "relation_type": rel_type
+            }
+            for cat_id, cat_name, score, rel_type in complementary
+        ]
+    }
+
+
+@router.get("/complementarity/model-info")
+async def get_complementarity_model_info():
+    """
+    Возвращает информацию о модели комплементарности.
+
+    Включает:
+    - Статус модели (обучена / не обучена)
+    - Размер предвычисленной матрицы
+    - Количество категорий с эмбеддингами
+    """
+    model_info = complementarity_model.get_model_info()
+    embeddings_info = category_embeddings_service.get_stats()
+
+    return {
+        **model_info,
+        "category_embeddings": embeddings_info,
+    }

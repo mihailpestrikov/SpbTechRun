@@ -1,14 +1,14 @@
 -- Категории
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
     id INT PRIMARY KEY,
     parent_id INT REFERENCES categories(id),
     name VARCHAR(255) NOT NULL
 );
 
-CREATE INDEX idx_categories_parent ON categories(parent_id);
+CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
 
 -- Товары
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
     id INT PRIMARY KEY,
     category_id INT REFERENCES categories(id),
     name VARCHAR(500) NOT NULL,
@@ -26,13 +26,13 @@ CREATE TABLE products (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_products_category ON products(category_id);
-CREATE INDEX idx_products_price ON products(price);
-CREATE INDEX idx_products_vendor ON products(vendor);
-CREATE INDEX idx_products_available ON products(available);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_price ON products(price);
+CREATE INDEX IF NOT EXISTS idx_products_vendor ON products(vendor);
+CREATE INDEX IF NOT EXISTS idx_products_available ON products(available);
 
 -- Скидки
-CREATE TABLE promos (
+CREATE TABLE IF NOT EXISTS promos (
     id SERIAL PRIMARY KEY,
     promo_id INT NOT NULL,
     product_id INT REFERENCES products(id),
@@ -44,11 +44,11 @@ CREATE TABLE promos (
     url VARCHAR(500)
 );
 
-CREATE INDEX idx_promos_product ON promos(product_id);
-CREATE INDEX idx_promos_dates ON promos(start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_promos_product ON promos(product_id);
+CREATE INDEX IF NOT EXISTS idx_promos_dates ON promos(start_date, end_date);
 
 -- Пользователи
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE users (
 );
 
 -- Корзина
-CREATE TABLE cart_items (
+CREATE TABLE IF NOT EXISTS cart_items (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id),
     session_id VARCHAR(255),
@@ -68,11 +68,11 @@ CREATE TABLE cart_items (
     CONSTRAINT cart_user_or_session CHECK (user_id IS NOT NULL OR session_id IS NOT NULL)
 );
 
-CREATE INDEX idx_cart_user ON cart_items(user_id);
-CREATE INDEX idx_cart_session ON cart_items(session_id);
+CREATE INDEX IF NOT EXISTS idx_cart_user ON cart_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_cart_session ON cart_items(session_id);
 
 -- Заказы
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id) NOT NULL,
     status VARCHAR(50) DEFAULT 'pending',
@@ -81,10 +81,10 @@ CREATE TABLE orders (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_orders_user ON orders(user_id);
-CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 
-CREATE TABLE order_items (
+CREATE TABLE IF NOT EXISTS order_items (
     id SERIAL PRIMARY KEY,
     order_id INT REFERENCES orders(id) NOT NULL,
     product_id INT REFERENCES products(id) NOT NULL,
@@ -92,10 +92,10 @@ CREATE TABLE order_items (
     price DECIMAL(10,2) NOT NULL
 );
 
-CREATE INDEX idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 
 -- Просмотры товаров (для ML)
-CREATE TABLE product_views (
+CREATE TABLE IF NOT EXISTS product_views (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id),
     session_id VARCHAR(255),
@@ -103,6 +103,6 @@ CREATE TABLE product_views (
     viewed_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_product_views_user ON product_views(user_id);
-CREATE INDEX idx_product_views_product ON product_views(product_id);
-CREATE INDEX idx_product_views_session ON product_views(session_id);
+CREATE INDEX IF NOT EXISTS idx_product_views_user ON product_views(user_id);
+CREATE INDEX IF NOT EXISTS idx_product_views_product ON product_views(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_views_session ON product_views(session_id);

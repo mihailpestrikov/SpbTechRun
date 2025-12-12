@@ -156,6 +156,7 @@ class CatBoostRankerService:
         print("ЗАПУСК ОБУЧЕНИЯ")
         print("-" * 80)
 
+        print(f"Debug: Creating CatBoostRanker model...")
         self.model = CatBoostRanker(
             iterations=iterations,
             learning_rate=learning_rate,
@@ -167,12 +168,24 @@ class CatBoostRankerService:
             use_best_model=True,
             eval_metric="NDCG:top=10",
         )
+        print(f"Debug: Model created successfully")
 
-        self.model.fit(
-            train_pool,
-            eval_set=val_pool,
-            plot=False,
-        )
+        print(f"Debug: Starting model.fit()...")
+        print(f"  Train pool: {len(X_train_split)} samples, groups={len(set(groups_train_split))}")
+        print(f"  Val pool: {len(X_val)} samples, groups={len(set(groups_val))}")
+
+        try:
+            self.model.fit(
+                train_pool,
+                eval_set=val_pool,
+                plot=False,
+            )
+            print(f"Debug: model.fit() completed successfully")
+        except Exception as e:
+            print(f"Error in model.fit(): {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
         print("\n" + "-" * 80)
         print("ОЦЕНКА КАЧЕСТВА")
@@ -183,11 +196,34 @@ class CatBoostRankerService:
 
         from sklearn.metrics import roc_auc_score, average_precision_score
 
-        train_auc = roc_auc_score(y_train_split, train_predictions)
-        val_auc = roc_auc_score(y_val, val_predictions)
+        print(f"Debug: y_train unique values: {y_train_split.unique()}")
+        print(f"Debug: y_val unique values: {y_val.unique()}")
+        print(f"Debug: train_predictions min/max: {train_predictions.min()}/{train_predictions.max()}")
+        print(f"Debug: val_predictions min/max: {val_predictions.min()}/{val_predictions.max()}")
 
-        train_ap = average_precision_score(y_train_split, train_predictions)
-        val_ap = average_precision_score(y_val, val_predictions)
+        try:
+            train_auc = roc_auc_score(y_train_split, train_predictions)
+        except Exception as e:
+            print(f"Error calculating train_auc: {e}")
+            train_auc = 0.0
+
+        try:
+            val_auc = roc_auc_score(y_val, val_predictions)
+        except Exception as e:
+            print(f"Error calculating val_auc: {e}")
+            val_auc = 0.0
+
+        try:
+            train_ap = average_precision_score(y_train_split, train_predictions)
+        except Exception as e:
+            print(f"Error calculating train_ap: {e}")
+            train_ap = 0.0
+
+        try:
+            val_ap = average_precision_score(y_val, val_predictions)
+        except Exception as e:
+            print(f"Error calculating val_ap: {e}")
+            val_ap = 0.0
 
         print(f"Train AUC: {train_auc:.4f}")
         print(f"Val AUC:   {val_auc:.4f}")

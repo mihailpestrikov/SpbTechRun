@@ -1,14 +1,18 @@
 """
 Feature Extractor для CatBoost Ranker.
-Извлекает 39 признаков для ранжирования товаров.
+Извлекает 44 признака для ранжирования товаров (39 + 5 комплементарных).
 """
 
 import numpy as np
 from typing import Optional, Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from ..core.embeddings import cosine_similarity
 from ..db import queries
+from ..services.category_embeddings import category_embeddings_service
+from ..services.complementarity_model import complementarity_model
+from ..services.scenarios import scenarios_service
 
 
 class FeatureExtractor:
@@ -72,6 +76,12 @@ class FeatureExtractor:
             "cart_similarity_max",
             "cart_similarity_avg",
             "cart_products_count",
+            # NEW: Complementarity features
+            "complementarity_score",
+            "category_semantic_similarity",
+            "scenario_category_match",
+            "copurchase_category_count",
+            "categories_in_same_scenario",
         ]
 
     async def extract_features(
@@ -123,6 +133,11 @@ class FeatureExtractor:
             features["cart_similarity_max"] = 0.0
             features["cart_similarity_avg"] = 0.0
             features["cart_products_count"] = 0
+
+        # NEW: Complementarity features
+        features.update(await self._extract_complementarity_features(
+            main_product, candidate_product, session
+        ))
 
         return features
 
@@ -341,6 +356,90 @@ class FeatureExtractor:
             "cart_similarity_max": float(max_sim),
             "cart_similarity_avg": float(avg_sim),
             "cart_products_count": len(cart_products),
+        }
+
+    async def _extract_complementarity_features(
+        self,
+        main_product: Dict,
+        candidate_product: Dict,
+        session: Optional[AsyncSession],
+    ) -> Dict[str, float]:
+        """
+        Извлекает признаки комплементарности между категориями товаров.
+
+        5 новых признаков:
+        1. complementarity_score - скор из модели комплементарности
+        2. category_semantic_similarity - косинусное сходство эмбеддингов категорий
+        3. scenario_category_match - входят ли в один сценарий
+        4. copurchase_category_count - сколько раз товары из категорий покупали вместе
+        5. categories_in_same_scenario - в скольких сценариях категории вместе
+        """
+        main_cat_id = main_product.get("category_id")
+        cand_cat_id = candidate_product.get("category_id")
+
+        if not main_cat_id or not cand_cat_id:
+            return {
+                "complementarity_score": 0.0,
+                "category_semantic_similarity": 0.0,
+                "scenario_category_match": 0.0,
+                "copurchase_category_count": 0.0,
+                "categories_in_same_scenario": 0.0,
+            }
+
+        # 1. Complementarity score из модели
+        comp_score = complementarity_model.predict_score(main_cat_id, cand_cat_id)
+
+        # 2. Семантическое сходство категорий
+        cat_similarity = category_embeddings_service.similarity(main_cat_id, cand_cat_id)
+
+        # 3. Проверяем, входят ли категории в один сценарий
+        scenario_match = 0.0
+        scenarios_together = 0
+
+        for scenario in scenarios_service.scenarios.values():
+            main_in_scenario = False
+            cand_in_scenario = False
+            same_group = False
+
+            for group in scenario.groups:
+                if main_cat_id in group.category_ids:
+                    main_in_scenario = True
+                    if cand_cat_id in group.category_ids:
+                        same_group = True
+
+                if cand_cat_id in group.category_ids:
+                    cand_in_scenario = True
+
+            if main_in_scenario and cand_in_scenario:
+                scenarios_together += 1
+                if same_group:
+                    scenario_match = 0.5  # Одна группа = lower match (заменители)
+                else:
+                    scenario_match = 1.0  # Разные группы = комплементарные
+
+        # 4. Co-purchase на уровне категорий (агрегировано)
+        copurchase_cat_count = 0.0
+        if session:
+            result = await session.execute(
+                text("""
+                    SELECT COALESCE(SUM(copurchase_count), 0) as total
+                    FROM copurchase_stats cs
+                    JOIN products p1 ON cs.product_id_1 = p1.id
+                    JOIN products p2 ON cs.product_id_2 = p2.id
+                    WHERE p1.category_id = :cat1 AND p2.category_id = :cat2
+                """),
+                {"cat1": main_cat_id, "cat2": cand_cat_id}
+            )
+            row = result.fetchone()
+            if row:
+                copurchase_cat_count = float(row[0])
+
+        return {
+            "complementarity_score": float(comp_score),
+            "category_semantic_similarity": float(cat_similarity),
+            "scenario_category_match": float(scenario_match),
+            "copurchase_category_count": np.log1p(copurchase_cat_count),
+            "categories_in_same_scenario": float(scenarios_together),
         }
 
     def features_to_array(self, features: Dict[str, float]) -> np.ndarray:

@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .db import init_db, async_session
 from .services.scenarios import scenarios_service
 from .services.product_recommender import product_recommender
+from .services.category_embeddings import category_embeddings_service
+from .services.complementarity_model import complementarity_model
 from .api import router
 
 
@@ -16,8 +18,20 @@ async def lifespan(app: FastAPI):
     async with async_session() as session:
         # Загружаем категории для сценариев
         await scenarios_service.initialize(session)
+
         # Загружаем эмбеддинги в FAISS
         await product_recommender.load_embeddings(session)
+
+        # NEW: Загружаем эмбеддинги категорий
+        await category_embeddings_service.compute_embeddings(session)
+
+        # NEW: Модель комплементарности загружается автоматически в __init__
+        # Но проверим что она загружена
+        model_info = complementarity_model.get_model_info()
+        if model_info["status"] == "ready":
+            print(f"✓ Complementarity model loaded: {model_info['matrix_size']} pairs")
+        else:
+            print("⚠ Complementarity model not trained. Run: python -m app.train_complementarity")
 
     yield
 
