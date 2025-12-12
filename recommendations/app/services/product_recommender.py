@@ -7,9 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.embeddings import cosine_similarity
 from ..db import queries
 from .scenarios import scenarios_service
-from ..ml.catboost_ranker import catboost_ranker
 
 logger = logging.getLogger(__name__)
+
+# Lazy import для избежания циклического импорта
+def _get_catboost_ranker():
+    from ..ml.catboost_ranker import catboost_ranker
+    return catboost_ranker
 
 
 class ProductRecommender:
@@ -89,10 +93,11 @@ class ProductRecommender:
             )
 
         ranking_method = "formula"
-        if use_ml and catboost_ranker.model and recommendations:
+        catboost = _get_catboost_ranker()
+        if use_ml and catboost.model and recommendations:
             try:
                 candidates = [rec["product"] for rec in recommendations]
-                ranked_candidates = await catboost_ranker.rank_candidates(
+                ranked_candidates = await catboost.rank_candidates(
                     main_product=product,
                     candidates=candidates,
                     session=session,

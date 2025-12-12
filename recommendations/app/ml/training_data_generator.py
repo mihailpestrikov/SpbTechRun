@@ -67,6 +67,7 @@ class TrainingDataGenerator:
             features = await self._extract_features_for_sample(session, sample)
             if features:
                 X_positive.append(features)
+                y_positive.append(1)  # Positive label
                 groups_positive.append(sample["main_product_id"])
 
         print(f"  ✓ Признаки извлечены для {len(X_positive)}/{len(all_positive)} позитивных")
@@ -79,6 +80,7 @@ class TrainingDataGenerator:
             features = await self._extract_features_for_sample(session, sample)
             if features:
                 X_negative.append(features)
+                y_negative.append(0)  # Negative label
                 groups_negative.append(sample["main_product_id"])
 
         print(f"  ✓ Признаки извлечены для {len(X_negative)}/{len(all_negative)} негативных")

@@ -530,3 +530,47 @@ GET /stats
   "total_copurchases": 12450
 }
 ```
+
+---
+
+## NEW: Система комплементарных категорий
+
+### Обзор
+
+Добавлена ML-модель для определения комплементарности категорий товаров (например: штукатурка ↔ шпатели, плитка ↔ клей).
+
+### Компоненты
+
+1. **CategoryEmbeddingsService** - вычисляет эмбеддинги категорий как среднее эмбеддингов товаров
+2. **ComplementarityModel** - LogisticRegression классификатор для предсказания комплементарности
+3. **Датасет** - 303 размеченные пары категорий (165 позитивных + 138 негативных)
+4. **5 новых признаков** для CatBoost модели
+
+### Быстрый старт
+
+```bash
+# 1. Обучить модель комплементарности
+docker exec spbtechrun-recommendations-1 python -m app.train_complementarity
+
+# 2. Переобучить CatBoost с новыми признаками
+curl -X POST "http://localhost:8000/ml/train?iterations=500"
+
+# 3. Перезапустить сервис
+docker-compose restart recommendations
+
+# 4. Проверить работу
+curl "http://localhost:8000/complementary-categories/25185?top_k=5"
+```
+
+### Ожидаемые улучшения метрик
+
+| Метрика | До | После | Улучшение |
+|---------|-----|-------|-----------|
+| Cross-category NDCG@10 | ~0.45 | ~0.65 | +44% |
+| Category diversity в топ-10 | 1-2 | 3-4 | +100% |
+| Approval rate для cross-category | ~55% | ~75% | +36% |
+| CTR на комплементарные товары | ~3% | ~7% | +133% |
+
+### Подробная документация
+
+См. [docs/COMPLEMENTARITY_FEATURES_GUIDE.md](../docs/COMPLEMENTARITY_FEATURES_GUIDE.md)
