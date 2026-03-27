@@ -1,10 +1,12 @@
-# Technical Design Review: Сценарные рекомендации
+# Technical Design Review: Рекомендации товаров в корзине
 
 ---
 
 ## 1. Что строим
 
-Сервис сценарных рекомендаций для магазина строительных товаров. Пользователь выбирает вид ремонтных работ (сценарий) и получает набор товарных групп с рекомендациями по каждой. Система отслеживает прогресс заполнения корзины и подбирает товары, которые с наибольшей вероятностью закроют незакрытые группы.
+Сервис рекомендаций товаров в корзине для магазина строительных товаров. На основе содержимого корзины система автоматически определяет, какой вид работ выполняет пользователь, и рекомендует недостающие товары. Пользователь видит только список рекомендованных товаров — без сценариев, групп или прогресс-баров.
+
+Сценарии — внутренняя сущность системы. Они создаются и редактируются администраторами, но никогда не показываются пользователю. Пользователь не выбирает сценарий явно и не знает о его существовании.
 
 Проект пишется с нуля. Из хакатонного решения переиспользуются идеи и подходы, но не код.
 
@@ -49,9 +51,9 @@ CREATE TABLE products (
     updated_at      TIMESTAMP DEFAULT now()
 );
 
--- Наличие товаров по магазинам/регионам (опционально)
--- Подключается, если для продукта важна доступность по точкам продаж.
--- Без этой таблицы фильтрация идёт только по products.available.
+-- Наличие товаров по регионам — обязательная часть схемы.
+-- Источник данных: TBD (уточняется). Синхронизируется Go-бэкендом.
+-- Все retrieval-каналы фильтруют по in_stock = true для региона пользователя.
 CREATE TABLE product_availability (
     product_id  INTEGER REFERENCES products(id),
     store_id    VARCHAR(50),                  -- ID магазина или региона
@@ -109,7 +111,7 @@ CREATE TABLE product_features (
 );
 ```
 
-### 2.2 Сценарии (управляются Go-бэкендом, CRUD через админку)
+### 2.2 Сценарии (внутренняя сущность, управляются Go-бэкендом через админку)
 
 ```sql
 CREATE TABLE scenarios (
@@ -126,10 +128,9 @@ CREATE TABLE scenarios (
 CREATE TABLE scenario_groups (
     id              SERIAL PRIMARY KEY,
     scenario_id     VARCHAR(50) REFERENCES scenarios(id),
-    name            VARCHAR NOT NULL,
+    name            VARCHAR NOT NULL,           -- внутреннее название группы (для админки и логов)
     is_required     BOOLEAN DEFAULT true,
     sort_order      INTEGER DEFAULT 0,
-    hint_text       TEXT,                      -- подсказка по количеству: "Расход: ~8 кг/м²"
     created_at      TIMESTAMP DEFAULT now()
 );
 
@@ -157,6 +158,8 @@ CREATE TABLE compatibility_rules (
 ```
 
 Версионирование: при изменении сценария `version` инкрементируется. Все логи рекомендаций хранят `scenario_version`, чтобы можно было оценить эффект изменений.
+
+Workflow для менеджеров: `draft` → редактирование групп и весов → `active` (начинает использоваться) → `archived`. Публикация происходит явно — черновик не попадает в продакшн. Статус `draft` позволяет редактировать сценарий до запуска без влияния на живые рекомендации.
 
 ### 2.3 ML-данные (управляются Python ML-сервисом)
 
@@ -269,15 +272,16 @@ CREATE INDEX idx_actions_product ON recommendation_actions(product_id, created_a
 
 #### Impression (показ) — создаётся на сервере автоматически
 
-Фронт ничего дополнительно не отправляет. Когда ML-сервис генерирует рекомендации, он сам записывает impressions: для каждой незакрытой группы — отдельную запись с `cart_snapshot`, `candidates`, `ranking_method`. Все impressions одного запроса объединены `request_id`. В ответе клиенту для каждой группы возвращается `impression_id`.
+Фронт ничего дополнительно не отправляет. Когда ML-сервис генерирует рекомендации, он сам записывает impressions: для каждой незакрытой группы определённого сценария — отдельную запись с `cart_snapshot`, `candidates`, `ranking_method`. Все impressions одного запроса объединены `request_id`. В ответе клиенту возвращается `request_id` для привязки действий.
 
 ```
-Фронт: GET /api/scenarios/walls/recommendations?cart=1,2,3
+Фронт: GET /api/recommendations?cart=1,2,3
   → Go-бэкенд проксирует в ML-сервис
+  → ML-сервис определяет сценарий по корзине
   → ML-сервис генерирует рекомендации для каждой незакрытой группы
   → ML-сервис записывает N impressions в БД (по одному на группу, общий request_id)
-  → Возвращает ответ с impression_id внутри каждой группы
-  ← Фронт получает рекомендации + impression_id по каждой группе
+  → Объединяет результаты в плоский список товаров
+  ← Фронт получает список рекомендаций + request_id
 ```
 
 #### Action (клик, добавление в корзину) — один лёгкий POST с фронта
@@ -287,11 +291,13 @@ CREATE INDEX idx_actions_product ON recommendation_actions(product_id, created_a
 ```
 POST /api/events
 {
-  "impression_id": 12345,
+  "request_id": "abc-123",
   "product_id": 1001,
   "action_type": "click"
 }
 ```
+
+Go-бэкенд находит нужный impression по `request_id` + `product_id` (товар мог быть в кандидатах нескольких групп — берётся impression с наименьшей позицией).
 
 Это fire-and-forget: фронт не ждёт ответа, не блокирует UI. Один маленький POST на клик — нагрузка ничтожна даже при большом трафике.
 
@@ -330,7 +336,7 @@ POST /api/events
 ```
 POST /api/feedback
 {
-  "impression_id": 12345,
+  "request_id": "abc-123",
   "product_id": 1001,
   "feedback_type": "positive"
 }
@@ -351,8 +357,8 @@ POST /api/feedback
 
 #### Что меняется на фронтенде (минимум)
 
-1. Сохранить `impression_id` из ответа — он возвращается внутри каждой группы с рекомендациями
-2. При клике на рекомендованный товар — отправить `POST /api/events` с `impression_id` группы, `product_id`, `action_type="click"` (fire-and-forget)
+1. Сохранить `request_id` из ответа на запрос рекомендаций
+2. При клике на рекомендованный товар — отправить `POST /api/events` с `request_id`, `product_id`, `action_type="click"` (fire-and-forget)
 3. При добавлении рекомендованного товара в корзину — то же самое с `action_type="add_to_cart"`
 4. Если есть UI для лайка/дизлайка — `POST /api/feedback`
 
@@ -426,17 +432,13 @@ for cat_id, product_ids in products_by_category.items():
 
 ---
 
-## 4. Сценарный pipeline: определение сценария
+## 4. Pipeline: определение сценария по корзине
 
-### 4.1 Явный выбор
+Сценарий определяется автоматически по содержимому корзины. Пользователь не выбирает сценарий — система сама решает, какой набор товаров рекомендовать. Это единственный путь определения сценария.
 
-Пользователь выбрал сценарий на странице → `scenario_id` приходит в запросе. Загружаем сценарий из БД, переходим к анализу корзины.
+### 4.1 Launch-версия: покрытие с учётом весов категорий
 
-### 4.2 Автоопределение по корзине
-
-#### Launch-версия: покрытие с учётом весов категорий
-
-На старте автоопределение работает через подсчёт покрытия обязательных групп сценария, с учётом весов категорий из `scenario_group_category_weights`. Это достаточно для запуска: основной сценарий использования — явный выбор сценария пользователем. Автоопределение — вспомогательный режим.
+Для каждого активного сценария считается взвешенное покрытие обязательных групп категориями товаров из корзины. Веса берутся из `scenario_group_category_weights`.
 
 ```python
 def detect_scenario(cart_product_ids: list[int]) -> Optional[tuple[str, float]]:
@@ -471,11 +473,11 @@ def detect_scenario(cart_product_ids: list[int]) -> Optional[tuple[str, float]]:
     return None
 ```
 
-`MIN_CONFIDENCE` — порог, ниже которого сценарий не навязывается. На старте: 0.15–0.2.
+`MIN_CONFIDENCE` — порог, ниже которого рекомендации не показываются (корзина не соответствует ни одному сценарию). На старте: 0.15–0.2.
 
-#### Целевое улучшение: скоринг с дополнительными сигналами
+### 4.2 Целевое улучшение: скоринг с дополнительными сигналами
 
-После накопления данных автоопределение можно усилить:
+Автоопределение — ключевой компонент, от его качества зависит релевантность всех рекомендаций. После накопления данных усиливаем:
 
 1. **Эмбеддинг-скоринг:** считать cosine similarity между средним эмбеддингом корзины и эталонными эмбеддингами сценария (средний эмбеддинг товаров, типичных для сценария).
 2. **Co-purchase сигнал:** если товары корзины часто покупаются вместе с товарами из групп сценария — это дополнительное подтверждение.
@@ -484,47 +486,29 @@ def detect_scenario(cart_product_ids: list[int]) -> Optional[tuple[str, float]]:
 
 Итоговый score можно считать как взвешенную сумму или обучить лёгкий классификатор (LogisticRegression / small CatBoost) на данных `(cart → scenario)`, собранных за фазы 1–2.
 
-### 4.3 Анализ корзины и прогресс
+### 4.3 Анализ корзины: определение незакрытых групп
+
+Внутренний анализ — какие группы сценария уже закрыты товарами из корзины, а для каких нужны рекомендации. Результат не показывается пользователю, но определяет набор кандидатов для retrieval.
 
 ```python
 def analyze_cart(scenario, cart_products) -> dict:
-    cart_category_ids = {p.category_id for p in cart_products}
-
-    completed = []
-    missing = []
+    """Определяет, для каких групп нужны рекомендации."""
+    missing_groups = []
 
     for group in sorted(scenario.groups, key=lambda g: g.sort_order):
         group_cat_ids = get_group_category_ids(group.id)
-        products_in_group = [
-            p for p in cart_products
-            if p.category_id in group_cat_ids
-        ]
-        if products_in_group:
-            completed.append({
-                "group": group,
-                "cart_products": products_in_group
-            })
-        else:
-            missing.append(group)
+        has_product = any(p.category_id in group_cat_ids for p in cart_products)
+        if not has_product:
+            missing_groups.append(group)
 
-    required_total = sum(1 for g in scenario.groups if g.is_required)
-    required_completed = sum(
-        1 for item in completed if item["group"].is_required
-    )
-    progress = int(required_completed / max(required_total, 1) * 100)
-
-    return {
-        "completed": completed,
-        "missing": missing,
-        "progress": progress
-    }
+    return {"missing_groups": missing_groups}
 ```
 
 ---
 
-## 5. Сценарный pipeline: retrieval
+## 5. Pipeline: retrieval
 
-Для каждой незакрытой группы собираем кандидатов из нескольких каналов параллельно. Каждый канал возвращает список `(product_id, rank_in_channel)`.
+После определения сценария и незакрытых групп, для каждой группы собираем кандидатов из нескольких каналов параллельно. Каждый канал возвращает список `(product_id, rank_in_channel)`. Результаты по всем группам объединяются в общий пул кандидатов.
 
 ### 5.1 Канал: Group popularity
 
@@ -711,7 +695,7 @@ RRF не требует нормализации скоров. `k=60` — ста
 
 ---
 
-## 6. Сценарный pipeline: ranking
+## 6. Pipeline: ranking
 
 ### 6.1 Два режима
 
@@ -719,9 +703,9 @@ RRF не требует нормализации скоров. `k=60` — ста
 
 **ML-режим (фаза 2+):** для каждого кандидата извлекаются признаки, CatBoostRanker предсказывает score.
 
-### 6.2 Признаки сценарного ранкера
+### 6.2 Признаки ранкера
 
-Для каждого кандидата в контексте `(корзина, сценарий, группа)` извлекаются ~30 табличных признаков. CatBoost работает с таблицами, корзина не подаётся как вектор.
+Для каждого кандидата в контексте `(корзина, сценарий, группа)` извлекаются ~30 табличных признаков. Сценарий и группа — внутренние сущности, пользователь их не видит, но они определяют набор кандидатов и используются в признаках. CatBoost работает с таблицами, корзина не подаётся как вектор.
 
 #### Basket-candidate (взаимодействие с корзиной)
 
@@ -897,6 +881,34 @@ def apply_rules(ranked_candidates, cart_products, scenario_id, group):
 
 Правила хранятся в `compatibility_rules` и редактируются через админку. Пример: "Если в корзине цементная штукатурка, не рекомендовать гипсовые шпатлёвки".
 
+### 6.6 Формирование итогового списка
+
+Пользователь видит один плоский список рекомендаций. Внутри система обрабатывает каждую незакрытую группу отдельно (retrieval → ranking → rules), а затем объединяет результаты:
+
+```python
+def build_final_recommendations(scenario, missing_groups, cart_products, limit=20):
+    all_candidates = []
+
+    for group in missing_groups:
+        # Полный pipeline для группы: retrieval → merge → rank → rules
+        group_candidates = process_group(group, scenario, cart_products)
+        for c in group_candidates:
+            c["_group_name"] = group.name  # для логирования, не для пользователя
+        all_candidates.extend(group_candidates)
+
+    # Дедупликация: если товар попал в кандидаты нескольких групп — оставить с лучшим score
+    seen = {}
+    for c in all_candidates:
+        pid = c["product_id"]
+        if pid not in seen or c["score"] > seen[pid]["score"]:
+            seen[pid] = c
+    unique = sorted(seen.values(), key=lambda c: c["score"], reverse=True)
+
+    return unique[:limit]
+```
+
+Внутри каждой группы ранжирование происходит в контексте `(cart, scenario, group)`. Между группами товары сравниваются по абсолютному score. При необходимости можно добавить диверсификацию: чередовать товары из разных групп, чтобы рекомендации не были однобокими.
+
 ---
 
 ## 7. Модель комплементарности категорий
@@ -958,7 +970,7 @@ CREATE TABLE category_relations (
 
 ---
 
-## 8. Обучение сценарного ранкера
+## 8. Обучение ранкера
 
 ### 8.1 Структура обучающей выборки
 
@@ -968,7 +980,7 @@ CREATE TABLE category_relations (
 @dataclass
 class TrainingExample:
     query_id: str       # hash(session_id, scenario_id, group_name, sorted(cart_snapshot))
-    features: np.array  # ~23 признака
+    features: np.array  # ~31 признак
     label: int          # 0-3 graded relevance
     position: int       # позиция в выдаче (для position bias correction)
 ```
@@ -1194,69 +1206,52 @@ A/B тест: 90% трафика на RRF, 10% на ML. Сравниваем CTR
 
 ---
 
-## 10. Альтернативы
+## 10. Альтернативы (замена товара в корзине)
 
-Альтернативы — часть общего сценарного режима, а не отдельный pipeline. Используют ту же инфраструктуру retrieval и ranking.
+Альтернативы — вспомогательный режим. Пользователь хочет заменить товар в корзине на аналог (другой бренд, другая цена). Используют ту же инфраструктуру retrieval и ranking.
 
 ### 10.1 Когда показывать
 
-- Группа закрыта товаром из корзины → показать альтернативы (другой бренд, другая цена)
-- Пользователь явно запросил замену для товара в группе
-- Все обязательные группы закрыты → показать альтернативы для каждого товара
-- Альтернативы по цене: дешевле или дороже текущего выбора
+- Пользователь запросил "Показать похожие" для конкретного товара в корзине
+- Интерфейс предлагает альтернативы при просмотре товара
 
 ### 10.2 Retrieval альтернатив
 
-Для товара `current` из корзины, закрывающего группу, гибридный подбор из нескольких источников:
+Для товара `current` гибридный подбор из нескольких источников:
 
 ```python
-def retrieve_alternatives(current_product, group, cart_products, limit=10):
+def retrieve_alternatives(current_product, cart_products, limit=10):
     candidates = {}
 
     # 1. Embedding similarity — семантически похожие товары из той же категории
     current_emb = get_embedding(current_product.id)
     if current_emb is not None:
-        group_cat_ids = get_group_category_ids(group.id)
-        similar = faiss_search_in_categories(current_emb, group_cat_ids, k=30)
+        similar = faiss_search_in_categories(
+            current_emb, [current_product.category_id], k=30
+        )
         for pid, sim_score in similar:
             if pid != current_product.id:
                 candidates[pid] = {"embedding_sim": sim_score}
 
     # 2. Co-purchase overlap — товары, которые покупают вместо текущего
-    #    (покупаются с теми же товарами, что и текущий)
     copurchase_alts = get_copurchase_alternatives(
-        current_product.id, group_cat_ids, limit=20
+        current_product.id, [current_product.category_id], limit=20
     )
     for pid, lift in copurchase_alts:
         if pid not in candidates:
             candidates[pid] = {}
         candidates[pid]["copurchase_lift"] = lift
 
-    # 3. Popularity fallback — популярные товары из категорий группы
-    popular = get_popular_in_categories(group_cat_ids, exclude=[current_product.id], limit=20)
+    # 3. Popularity fallback — популярные товары из той же категории
+    popular = get_popular_in_categories(
+        [current_product.category_id], exclude=[current_product.id], limit=20
+    )
     for pid, pop_score in popular:
         if pid not in candidates:
             candidates[pid] = {}
         candidates[pid]["popularity"] = pop_score
 
     return candidates
-```
-
-```sql
--- Co-purchase alternatives: товары из той же группы,
--- которые покупаются с теми же товарами корзины, что и текущий
-SELECT cs.product_id_2 as alt_product_id,
-       MAX(cs.lift) as max_lift
-FROM copurchase_stats cs
-JOIN products p ON p.id = cs.product_id_2
-WHERE cs.product_id_1 = ANY(:other_cart_product_ids)  -- товары корзины кроме текущего
-  AND p.category_id = ANY(:group_category_ids)
-  AND p.available = true
-  AND p.id != :current_product_id
-  AND cs.lift > 1.0
-GROUP BY cs.product_id_2
-ORDER BY max_lift DESC
-LIMIT 20;
 ```
 
 ### 10.3 Ранжирование альтернатив
@@ -1292,10 +1287,10 @@ def extract_alternative_features(alternative, current_product, cart_products):
 ### 10.4 API альтернатив
 
 ```
-GET /scenarios/:id/alternatives?product_id=456&group_name=Шпатлёвки&cart=1,2,3
+GET /api/alternatives?product_id=456&cart=1,2,3
 ```
 
-Возвращает список альтернатив с `impression_id` для логирования. Фидбек по альтернативам собирается тем же механизмом (click / add_to_cart через `POST /api/events`).
+Возвращает список альтернатив с `request_id` для логирования. Фидбек собирается тем же механизмом (`POST /api/events`).
 
 ---
 
@@ -1306,44 +1301,58 @@ GET /scenarios/:id/alternatives?product_id=456&group_name=Шпатлёвки&car
 Go-бэкенд — Data API и точка входа для клиентов:
 
 1. **Каталог:** синхронизация товаров, категорий, цен, акций из внешнего источника (ERP/1С). Хранение локальной копии в PostgreSQL.
-2. **Сценарии:** CRUD через админ-панель. Хранение в БД, версионирование.
-3. **Корзины:** хранение текущей корзины пользователя (по user_id или session_id).
-4. **Заказы:** приём и хранение заказов. Источник данных для co-purchase.
-5. **События:** приём impression/action событий от клиента, запись в БД.
-6. **Proxy:** проксирование запросов рекомендаций в Python ML-сервис.
+2. **Сценарии:** CRUD через админ-панель (внутренний интерфейс). Хранение в БД, версионирование.
+3. **Заказы:** приём и хранение заказов. Источник данных для co-purchase.
+4. **События:** приём action событий от клиента, запись в БД.
+5. **Proxy:** проксирование запросов рекомендаций в Python ML-сервис.
 
 ### 11.2 API
 
-**Каталог и сценарии:**
+**Каталог:**
 
 | Метод | Путь | Назначение |
 |-------|------|------------|
 | GET | `/api/products` | Список товаров с фильтрацией |
 | GET | `/api/products/:id` | Детали товара |
 | GET | `/api/categories` | Иерархия категорий |
-| GET | `/api/scenarios` | Список активных сценариев |
-| GET | `/api/scenarios/:id` | Детали сценария с группами |
-| POST | `/api/admin/scenarios` | Создание сценария |
-| PUT | `/api/admin/scenarios/:id` | Обновление сценария |
 
 **Рекомендации (proxy → ML-сервис):**
 
 | Метод | Путь | Назначение |
 |-------|------|------------|
-| GET | `/api/scenarios/:id/recommendations?cart=1,2,3` | Рекомендации для сценария |
-| GET | `/api/recommendations/scenario/auto?cart=1,2,3` | Автоопределение сценария |
+| GET | `/api/recommendations?cart=1,2,3` | Рекомендации товаров по корзине |
+| GET | `/api/alternatives?product_id=456&cart=1,2,3` | Альтернативы для товара |
 
 **Фидбек и события:**
 
 | Метод | Путь | Назначение |
 |-------|------|------------|
 | POST | `/api/feedback` | Явный фидбек |
-| POST | `/api/events` | impression/click/add_to_cart/purchase |
-| POST | `/api/events/batch` | Пакетная отправка |
+| POST | `/api/events` | click/add_to_cart |
+
+**Админка (внутренний интерфейс, не для клиентов):**
+
+| Метод | Путь | Назначение |
+|-------|------|------------|
+| GET | `/api/admin/scenarios` | Список сценариев |
+| GET | `/api/admin/scenarios/:id` | Детали сценария с группами |
+| POST | `/api/admin/scenarios` | Создание сценария |
+| PUT | `/api/admin/scenarios/:id` | Обновление сценария |
 
 ### 11.3 Синхронизация каталога
 
-Go-бэкенд периодически (или событийно) загружает данные из источника магазина и обновляет локальные таблицы. При добавлении нового товара — отправляет запрос на генерацию эмбеддинга в ML-сервис.
+Источник — Oracle БД магазина. Go-бэкенд получает события об изменениях в каталоге (новые товары, изменение цен, изменение наличия) и обновляет локальные таблицы почти в реальном времени.
+
+```
+Oracle БД → событие об изменении → Go-бэкенд
+  → UPDATE products (цена, наличие, описание)
+  → если новый товар или изменилось описание:
+      POST /embeddings/generate → ML-сервис генерирует эмбеддинг
+  → если изменилось наличие по региону:
+      UPDATE product_availability
+```
+
+Региональные стоки (`product_availability`) синхронизируются из отдельного источника (TBD). Формат и частота обновления уточняются.
 
 ### 11.4 Пересчёт co-purchase
 
@@ -1482,57 +1491,38 @@ def refresh_copurchase_cache():
 
 | Метод | Путь | Назначение |
 |-------|------|------------|
-| GET | `/scenarios/:id/recommendations` | Основной: рекомендации для сценария + корзины |
-| GET | `/recommendations/scenario/auto` | Автоопределение + рекомендации |
-| POST | `/feedback` | Явный фидбек |
-| POST | `/events` | Логирование impression/action |
-| POST | `/ml/train` | Переобучение сценарного ранкера |
+| GET | `/recommendations` | Основной: рекомендации по корзине |
+| GET | `/alternatives` | Альтернативы для товара |
+| POST | `/ml/train` | Переобучение ранкера |
 | GET | `/ml/model-info` | Статус модели |
 | POST | `/embeddings/generate` | Генерация эмбеддинга для нового товара |
 | GET | `/health` | Health check |
 
-### 12.2 Основной запрос: рекомендации для сценария
+### 12.2 Основной запрос: рекомендации по корзине
 
 **Request:**
 ```
-GET /scenarios/walls/recommendations?cart_product_ids=123,456,789&limit_per_group=10
+GET /recommendations?cart_product_ids=123,456,789&limit=20
 ```
 
 **Response:**
 ```json
 {
-  "scenario": {
-    "id": "walls",
-    "name": "Выравнивание стен",
-    "version": 3
-  },
-  "progress": {
-    "completed_required": 3,
-    "total_required": 7,
-    "percentage": 42
-  },
-  "groups": [
+  "request_id": "abc-123",
+  "recommendations": [
     {
-      "name": "Шпатлёвки",
-      "status": "completed",
-      "cart_products": [{"id": 456, "name": "Шпатлёвка Vetonit LR+"}]
+      "product_id": 1001,
+      "name": "Шпатель стальной 200мм",
+      "price": 350,
+      "score": 0.87,
+      "position": 1
     },
     {
-      "name": "Шпатели",
-      "status": "missing",
-      "hint_text": null,
-      "impression_id": 98765,
-      "recommendations": [
-        {
-          "product_id": 1001,
-          "name": "Шпатель стальной 200мм",
-          "price": 350,
-          "score": 0.87,
-          "position": 1,
-          "sources": ["copurchase", "popularity"],
-          "explanation": "Часто покупают вместе с Vetonit LR+"
-        }
-      ]
+      "product_id": 2005,
+      "name": "Грунтовка Ceresit CT 17",
+      "price": 890,
+      "score": 0.82,
+      "position": 2
     }
   ],
   "ranking_method": "catboost"
@@ -1572,25 +1562,32 @@ async def startup():
 
 | Масштаб каталога | FAISS RAM | FAISS поиск | Рекомендация |
 |-----------------|-----------|-------------|------|
-| 100k товаров | ~300 MB | ~2ms | Укладывается в требования |
-| 500k товаров | ~1.5 GB | ~50ms | Пограничный, рассмотреть IVF |
+| 90k товаров (текущий) | ~270 MB | ~1ms | IndexFlatIP достаточен |
+| 500k товаров (целевой) | ~1.5 GB | ~50ms | Пограничный — при деградации перейти на IndexIVFFlat |
 | 1M товаров | ~3 GB | ~100ms | Нужен IVFFlat/HNSW |
 
 ---
 
-## 14. Открытые вопросы
+## 14. Принятые решения и открытые вопросы
 
-1. **Источник каталога:** откуда берутся товары, категории, цены, наличие? Формат и частота обновления?
-2. **История заказов:** есть ли доступ к order_items? За какой период? Можно ли использовать регулярно?
-3. **Масштаб каталога:** сколько товаров ожидается? (влияет на FAISS, RAM, latency)
-4. **Владелец сценариев:** кто определяет состав сценариев и групп?
-5. **Корзины и сессии:** есть ли доступ к событиям корзины и session_id?
-6. **Связка показ → покупка:** можно ли технически связать показ рекомендации с последующей покупкой?
-7. **Регионы и склады:** нужно ли учитывать наличие по магазинам/регионам?
-8. **Автоопределение сценария:** нужно как отдельный режим или достаточно явного выбора?
-9. **Объясняемость:** нужно ли показывать пользователю, почему рекомендован товар?
-10. **Ollama:** допустим ли как сервис для эмбеддингов, или нужна альтернатива?
+### Принятые решения
+
+| Вопрос | Решение |
+|--------|---------|
+| Источник каталога | Oracle БД магазина. Синхронизация через события, почти real-time. |
+| История заказов | Доступна, можно использовать регулярно для пересчёта co-purchase. |
+| Масштаб каталога | Сейчас ~90k товаров, целевой максимум ~500k. |
+| Владелец сценариев | Менеджеры магазина через админку. Поддержка статуса `draft` обязательна. |
+| Корзины и сессии | Доступны. session_id можно использовать для привязки impressions. |
+| Региональные стоки | Нужно учитывать наличие по регионам. `product_availability` — обязательная часть схемы. Источник данных: TBD (предстоит найти). |
+| Эмбеддинги | Ollama + nomic-embed-text. |
+| Дедупликация | Если товар подходит нескольким группам — показывать один раз с наибольшим score. Реализовано в разделе 6.6. |
+
+### Открытые вопросы
+
+1. **Минимальный размер корзины:** при какой корзине начинать показывать рекомендации? (1 товар? 2+?) Влияет на качество автоопределения сценария.
+2. **Источник региональных стоков:** откуда брать данные о наличии по регионам? Формат, частота обновления?
 
 ---
 
-*Документ описывает техническую реализацию системы сценарных рекомендаций с нуля. Основан на анализе хакатонного решения SpbTechRun, исследовании индустриальных подходов (Home Depot, Leroy Merlin, Alibaba, Pinterest) и целевом видении продукта.*
+*Документ описывает техническую реализацию системы рекомендаций товаров в корзине. Сценарии — скрытая внутренняя сущность, пользователь видит только рекомендованные товары. Основан на анализе хакатонного решения SpbTechRun, исследовании индустриальных подходов (Home Depot, Leroy Merlin, Alibaba, Pinterest) и целевом видении продукта.*
