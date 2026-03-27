@@ -23,7 +23,7 @@
 | category_id | integer, FK → categories | Категория товара |
 | name | text | Название |
 | price | decimal | Цена |
-| discount_percent | decimal | Процент скидки, NULL если акции нет |
+| discount_percent | decimal, nullable | Процент скидки, NULL если акции нет |
 | discount_price | decimal, nullable | Цена со скидкой, NULL если акции нет |
 | vendor | text | Производитель / бренд |
 | description | text | Описание товара |
