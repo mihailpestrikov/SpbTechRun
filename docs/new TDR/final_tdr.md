@@ -214,17 +214,6 @@ CREATE TABLE scenario_group_product_stats (
     PRIMARY KEY (scenario_id, group_name, product_id)
 );
 
--- Явный фидбек по рекомендациям
-CREATE TABLE recommendation_feedback (
-    id              SERIAL PRIMARY KEY,
-    session_id      VARCHAR,
-    user_id         INTEGER,
-    scenario_id     VARCHAR(50),
-    group_name      VARCHAR(100),
-    product_id      INTEGER NOT NULL,
-    feedback_type   VARCHAR(20) NOT NULL,     -- 'positive' | 'negative'
-    created_at      TIMESTAMP DEFAULT now()
-);
 ```
 
 ### 2.4 Логирование показов (критично для обучения)
@@ -331,17 +320,6 @@ Go-бэкенд находит нужный impression по `request_id` + `prod
 
 Приоритет привязки через предыдущие действия (шаг 1) снижает количество ложных совпадений: если пользователь кликнул на рекомендацию и потом купил — мы точно знаем impression. JSONB-поиск (шаг 2) — fallback для случаев, когда товар был показан, но пользователь добавил его в корзину другим способом (например, через поиск).
 
-#### Явный фидбек (лайк/дизлайк) — аналогично action
-
-```
-POST /api/feedback
-{
-  "request_id": "abc-123",
-  "product_id": 1001,
-  "feedback_type": "positive"
-}
-```
-
 #### Типы собираемых сигналов
 
 | Сигнал | Источник | Как передаётся | Ценность для обучения |
@@ -350,17 +328,15 @@ POST /api/feedback
 | Click | Фронт | `POST /api/events` (fire-and-forget) | Слабый позитив, подвержен position bias |
 | Add-to-cart | Фронт | `POST /api/events` (fire-and-forget) | Средний позитив |
 | Purchase | Go-бэкенд | Автоматически при оформлении заказа | Сильный позитив |
-| Explicit feedback | Фронт | `POST /api/feedback` (если есть UI) | Прямой сигнал, но мало данных |
 | Co-purchase | Go-бэкенд | Пересчёт из order_items по расписанию | Офлайн-сигнал для retrieval и cold start |
 
-Неявные сигналы (click, add-to-cart, purchase) — основной источник для обучения ранкера. Явный фидбек (лайк/дизлайк) полезен, но его мало — пользователи редко нажимают. Co-purchase не привязан к показам, но важен для retrieval и синтетических обучающих данных на старте.
+Неявные сигналы (click, add-to-cart, purchase) — основной источник для обучения ранкера. Co-purchase не привязан к показам, но важен для retrieval и синтетических обучающих данных на старте.
 
 #### Что меняется на фронтенде (минимум)
 
 1. Сохранить `request_id` из ответа на запрос рекомендаций
 2. При клике на рекомендованный товар — отправить `POST /api/events` с `request_id`, `product_id`, `action_type="click"` (fire-and-forget)
 3. При добавлении рекомендованного товара в корзину — то же самое с `action_type="add_to_cart"`
-4. Если есть UI для лайка/дизлайка — `POST /api/feedback`
 
 Всё остальное (impression, purchase linking, агрегация статистики) — на сервере.
 
@@ -1323,11 +1299,10 @@ Go-бэкенд — Data API и точка входа для клиентов:
 | GET | `/api/recommendations?cart=1,2,3` | Рекомендации товаров по корзине |
 | GET | `/api/alternatives?product_id=456&cart=1,2,3` | Альтернативы для товара |
 
-**Фидбек и события:**
+**События:**
 
 | Метод | Путь | Назначение |
 |-------|------|------------|
-| POST | `/api/feedback` | Явный фидбек |
 | POST | `/api/events` | click/add_to_cart |
 
 **Админка (внутренний интерфейс, не для клиентов):**
